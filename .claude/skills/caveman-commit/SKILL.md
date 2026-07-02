@@ -62,4 +62,4 @@ Always include body for: breaking changes, security fixes, data migrations, anyt
 
 ## Boundaries
 
-Only generates the commit message. Does not run `git commit`, does not stage files, does not amend. Output the message as a code block ready to paste. "stop caveman-commit" or "normal mode": revert to verbose commit style.
+Stages and commits directly: group changes into logical commits, write the message, run `git add` + `git commit`. Do not print paste-ready message blocks or tell the user to stage. Pause only for risky content (secrets-looking files, unrelated junk mixed into the diff). Never amend or push unless asked. "stop caveman-commit" or "normal mode": revert to verbose commit style.

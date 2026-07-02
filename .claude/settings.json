@@ -1,8 +1,7 @@
 {
   "permissions": {
     "allow": [
-      "Edit(/.claude/skills/hephaestus/**)",
-      "Bash(bash .claude/hooks/session-start.sh)"
+      "Edit(/.claude/skills/**)"
     ],
     "additionalDirectories": []
   },
