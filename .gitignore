@@ -1,4 +1,6 @@
 .DS_Store
 tools/project-forge/
-.claude/settings.local.json__pycache__/
+tools/prompts/
+.claude/settings.local.json
+__pycache__/
 *.pyc
