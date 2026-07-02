@@ -16,10 +16,14 @@ Non-negotiable rails, before any phase:
 
 Run from a fresh hephaestus clone (project-named directory). The user supplies the external project path ("adopt /path/to/project").
 
-1. **Snapshot the kit.** Stash the clone's kit files aside (in-memory or temp): `.claude/`, `.mcp.json`, `tools/mcp/forge-ref/`, `CLAUDE.md`, `docs/ARCHITECTURE.md` template knowledge.
-2. **Replace history.** Delete the clone's template `.git` — template history is noise in a child project. Copy the ENTIRE external project contents into the clone, **including its `.git`**: the full-history secrets scan (Phase 2) and `git mv` reference preservation (Phase 4) depend on real history. External project has no `.git` → copy the tree, `git init -b main`, commit a `pre-adoption snapshot` so there is a clean revert point.
-3. **Re-layer the kit** on top per the collision policy below, as the first checkpoint commit on a new `hephaestus/adopt` branch.
-4. **Verify**: `python3 tools/mcp/forge-ref/server.py --selftest` passes in the clone.
+**Which repo a git command targets matters at every step.** Before the swap in step 2, the clone's `.git` holds hephaestus TEMPLATE history — useless as project evidence. The external folder is only ever a copy SOURCE. After the swap, the clone's `.git` IS the external project's history, and everything from Phase 1 on runs against it. Never run survey/triage git commands before the swap.
+
+1. **Pre-flight (clone's own .git — the ONLY step that reads it).** Capture, before they're destroyed: `git remote get-url origin` → becomes frontmatter `hephaestus_base`; `tools/mcp/forge-ref/VERSION` → becomes `hephaestus_version` (file missing = stale clone predating kit versioning — tell the user to re-pull the base and stop); `git status --porcelain` — dirty kit files get noted in the report. Template git history is NOT evidence for anything; do not read it further.
+2. **Snapshot the kit.** Stash the clone's kit files aside (in-memory or temp): `.claude/`, `.mcp.json`, `tools/mcp/forge-ref/`, `CLAUDE.md`, `docs/ARCHITECTURE.md` template knowledge.
+3. **Replace history.** Delete the clone's template `.git` — template history is noise in a child project. Copy the ENTIRE external project contents into the clone, **including its `.git`**: the full-history secrets scan (Phase 2) and `git mv` reference preservation (Phase 4) depend on real history. External project has no `.git` → copy the tree, `git init -b main`, commit a `pre-adoption snapshot` so there is a clean revert point.
+4. **Re-layer the kit** on top per the collision policy below, as the first checkpoint commit on a new `hephaestus/adopt` branch.
+5. **Swap-verification gate (mandatory before Phase 1).** In the clone: `git log --oneline -5` must show the EXTERNAL project's commits, and `git remote get-url origin` must NOT be the hephaestus base anymore. Any hephaestus template commit subject in the log, or the base URL still on origin, means the swap failed — STOP, report, do not run any survey/triage phase against template history.
+6. **Verify kit**: `python3 tools/mcp/forge-ref/server.py --selftest` passes in the clone.
 
 Collision policy (external file exists where hephaestus has one):
 
@@ -40,7 +44,7 @@ Two facts to carry into the Phase 7 report:
 
 ## Phase 1 — Survey (evidence → frontmatter)
 
-Infer every schema.md field from the repo itself. Evidence map:
+Runs ONLY after the Phase 0 swap-verification gate: every git command here reads the external project's history now living in the clone. Infer every schema.md field from the repo itself. Evidence map:
 
 | Field | Evidence |
 |---|---|
