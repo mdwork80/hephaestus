@@ -350,6 +350,99 @@ def validate_frontmatter(text: str, check_cadence: bool = False) -> dict:
     return {"valid": not errors, "errors": errors}
 
 
+# =============================================================================
+# Zero-dependency secrets scanner
+# =============================================================================
+
+# Pattern pack. Deliberately conservative: high-signal formats + generic
+# credential assignments. gitleaks/detect-secrets supersede this when
+# installed; this exists so adopt-mode triage NEVER degrades to nothing.
+SECRET_PATTERNS: list[tuple[str, re.Pattern]] = [
+    ("aws-access-key-id", re.compile(r"\b(AKIA|ASIA)[0-9A-Z]{16}\b")),
+    ("github-token", re.compile(r"\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{36,}\b|\bgithub_pat_[A-Za-z0-9_]{50,}\b")),
+    ("slack-token", re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{10,}\b")),
+    ("private-key-block", re.compile(r"-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----")),
+    ("jwt", re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b")),
+    ("azure-storage-key", re.compile(r"AccountKey=[A-Za-z0-9+/=]{60,}")),
+    ("connection-string-password", re.compile(r"\b\w+://[^/\s:]+:([^@\s]{6,})@[\w.-]+")),
+    ("generic-assignment", re.compile(
+        # No leading \b: db_password / MY_SECRET etc. must match too.
+        r"(?i)(password|passwd|secret|api[_-]?key|auth[_-]?token|access[_-]?token|client[_-]?secret)\w*"
+        r"\s*[:=]\s*['\"]([^'\"\s]{8,})['\"]")),
+]
+_SCAN_SKIP_DIRS = {".git", "node_modules", "target", ".venv", "venv", "dist", "vendor", "__pycache__"}
+_SCAN_SKIP_FILES = {".secrets.baseline", "package-lock.json", "uv.lock", "Cargo.lock", "go.sum"}
+# No \b prefix: it can never match before non-word chars like ${ or <.
+_PLACEHOLDER_RE = re.compile(r"(?i)(example|sample|changeme|placeholder|your[_-]|xxxx|dummy|<[^>]+>|\$\{|%\()")
+# UUIDs are identifiers (Azure role ids, correlation ids), not secrets.
+_UUID_RE = re.compile(r"(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+
+
+def _shannon_entropy(s: str) -> float:
+    import math
+    if not s:
+        return 0.0
+    freq: dict[str, int] = {}
+    for c in s:
+        freq[c] = freq.get(c, 0) + 1
+    return -sum((n / len(s)) * math.log2(n / len(s)) for n in freq.values())
+
+
+def scan_secrets(root: str) -> dict:
+    """
+    Purpose: working-tree secrets scan with zero dependencies so adopt-mode
+    triage always produces findings even when gitleaks/detect-secrets are
+    absent. Pattern pack + entropy backstop; placeholders filtered.
+    Rationale: the dedicated tools were absent on the very machine this repo
+    was built on — a fallback is not optional. History scanning stays with
+    gitleaks (this covers the working tree only, and says so).
+    @logic-ref: forge-ref-secrets-scanner
+    """
+    base = Path(root).resolve()
+    if not base.is_dir():
+        raise ValueError(f"not a directory: {root}")
+    findings: list[dict] = []
+    scanned = 0
+    for path in sorted(base.rglob("*")):
+        if not path.is_file():
+            continue
+        rel_parts = path.relative_to(base).parts
+        if any(p in _SCAN_SKIP_DIRS for p in rel_parts) or path.name in _SCAN_SKIP_FILES:
+            continue
+        try:
+            if path.stat().st_size > 1_000_000:
+                continue
+            text = path.read_text(errors="strict")
+        except (UnicodeDecodeError, OSError):
+            continue  # binary or unreadable
+        scanned += 1
+        for lineno, line in enumerate(text.splitlines(), 1):
+            for pat_id, pat in SECRET_PATTERNS:
+                m = pat.search(line)
+                if not m:
+                    continue
+                if _PLACEHOLDER_RE.search(line):
+                    continue
+                secret = m.group(m.lastindex or 0)
+                # Generic assignments need an entropy gate to skip prose values.
+                if pat_id in ("generic-assignment", "connection-string-password") and _shannon_entropy(secret) < 3.0:
+                    continue
+                if pat_id == "generic-assignment" and _UUID_RE.match(secret):
+                    continue
+                findings.append({
+                    "file": str(path.relative_to(base)),
+                    "line": lineno,
+                    "pattern": pat_id,
+                    "redacted": secret[:4] + "…" + f"({len(secret)} chars)",
+                })
+    return {
+        "root": str(base),
+        "files_scanned": scanned,
+        "findings": findings,
+        "note": "working-tree scan only; run gitleaks for full git history coverage",
+    }
+
+
 def build_schema() -> dict:
     """
     Purpose: emit the governance contract as machine-readable data so
@@ -473,6 +566,20 @@ TOOLS = [
         "inputSchema": {"type": "object", "properties": {}},
     },
     {
+        "name": "scan_secrets",
+        "description": (
+            "Zero-dependency working-tree secrets scan (pattern pack + entropy "
+            "backstop, placeholders filtered). Fallback for when gitleaks / "
+            "detect-secrets are not installed — full git-history coverage still "
+            "requires gitleaks. Returns findings with file, line, pattern, and "
+            "a redacted preview; never the secret itself."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {"root": {"type": "string", "description": "Directory to scan (default: server's repo root)"}},
+        },
+    },
+    {
         "name": "validate_frontmatter",
         "description": (
             "Validate PROJECT.md frontmatter against the hephaestus governance "
@@ -506,6 +613,8 @@ def call_tool(name: str, arguments: dict) -> str:
         return render_template(arguments["name"], arguments.get("params") or {})
     if name == "get_schema":
         return json.dumps(build_schema(), indent=2)
+    if name == "scan_secrets":
+        return json.dumps(scan_secrets(arguments.get("root") or str(ROOT.parents[2])), indent=2)
     if name == "validate_frontmatter":
         result = validate_frontmatter(arguments["text"], bool(arguments.get("check_cadence")))
         return json.dumps(result, indent=2)
@@ -599,6 +708,21 @@ def selftest() -> int:
     if vf.exists() and schema["hephaestus_version"] != vf.read_text().strip():
         failures.append("get_schema version drifted from VERSION file")
 
+    # 2c. Secrets scanner catches runtime-constructed plants (nothing
+    # secret-shaped is ever committed, so gitleaks stays quiet on this repo).
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        plant = Path(td) / "app.py"
+        fake_key = "AKIA" + "Q" * 16
+        fake_pw = 'db_password = "' + "kX9v2mQ8pL4wn7Rt" + '"'
+        plant.write_text(f"key = '{fake_key}'\n{fake_pw}\nsafe = 'hello world'\n")
+        result = scan_secrets(td)
+        hits = {f["pattern"] for f in result["findings"]}
+        if "aws-access-key-id" not in hits or "generic-assignment" not in hits:
+            failures.append(f"secrets scanner missed planted secrets (got {hits})")
+        if any("hello" in f.get("redacted", "") for f in result["findings"]):
+            failures.append("secrets scanner false-positive on plain prose")
+
     # 3. Logic-ref integrity.
     ref_re = re.compile(r"@logic-ref:\s*([a-z0-9]+(?:-[a-z0-9]+)+)")
     source_ids: dict[str, int] = {}
@@ -638,6 +762,13 @@ def selftest() -> int:
 def main() -> None:
     if "--selftest" in sys.argv[1:]:
         sys.exit(selftest())
+    if "--scan-secrets" in sys.argv[1:]:
+        args = sys.argv[1:]
+        idx = args.index("--scan-secrets")
+        target = args[idx + 1] if len(args) > idx + 1 else str(ROOT.parents[2])
+        result = scan_secrets(target)
+        print(json.dumps(result, indent=2))
+        sys.exit(1 if result["findings"] else 0)
     for line in sys.stdin:
         line = line.strip()
         if not line:

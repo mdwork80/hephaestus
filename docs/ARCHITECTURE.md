@@ -71,7 +71,7 @@ repo); `[schema-validator-lockstep]` supersedes that repo's
   protocol handling and a constrained YAML-subset frontmatter parser that
   only accepts the exact layout schema.md §Frontmatter layout emits.
 - Affected @logic-refs: forge-ref-zero-dep-server forge-ref-conditionals
-  forge-ref-frontmatter-validator
+  forge-ref-frontmatter-validator forge-ref-secrets-scanner
 - Status: ACTIVE
 
 ---
