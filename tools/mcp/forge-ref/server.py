@@ -165,6 +165,10 @@ REQUIRED_FIELDS = [
     "cors_origins", "threat_model_required", "secrets_backend", "auth_model",
     "license", "ai_tooling", "review_cadence_days", "last_reviewed",
 ]
+# Scaffold-provenance fields: bootstrap/adopt always write them, but projects
+# scaffolded before they existed may lack them, so they stay optional.
+OPTIONAL_FIELDS = ["hephaestus_version", "hephaestus_base"]
+VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 
 
 def _parse_frontmatter(text: str) -> dict:
@@ -238,11 +242,16 @@ def validate_frontmatter(text: str, check_cadence: bool = False) -> dict:
     for f in REQUIRED_FIELDS:
         if f not in fm:
             errors.append(f"missing required field: {f}")
-    unknown = set(fm) - set(REQUIRED_FIELDS)
+    unknown = set(fm) - set(REQUIRED_FIELDS) - set(OPTIONAL_FIELDS)
     if unknown:
         errors.append(f"unknown fields (extra='forbid'): {sorted(unknown)}")
     if errors:
         return {"valid": False, "errors": errors}
+
+    if "hephaestus_version" in fm and not VERSION_RE.match(str(fm["hephaestus_version"])):
+        errors.append("hephaestus_version must be semver (X.Y.Z)")
+    if "hephaestus_base" in fm and not (1 <= len(str(fm["hephaestus_base"])) <= 300):
+        errors.append("hephaestus_base must be 1-300 characters")
 
     # --- field bounds ---------------------------------------------------
     if not (1 <= len(fm["project_name"]) <= 120):

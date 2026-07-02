@@ -1,6 +1,6 @@
 ---
 name: hephaestus
-description: Zero-question project scaffolder with security-by-default governance — validated PROJECT.md frontmatter, secrets hygiene, pre-commit gates, hardened containers, CI — in ANY programming or scripting language. Infers all answers from the task; never interviews. Bootstrap mode scaffolds a fresh clone; augment mode adds toolchain + safeguards when a new language or runtime pattern enters the project; adopt mode ingests an existing ungoverned codebase. Trigger. fresh clone with no PROJECT.md, "new project", "scaffold", "hephaestus", "/hephaestus", a task introducing a language/runtime not declared in PROJECT.md, or "adopt"/"ingest"/"onboard this existing project".
+description: Zero-question project scaffolder with security-by-default governance — validated PROJECT.md frontmatter, secrets hygiene, pre-commit gates, hardened containers, CI — in ANY programming or scripting language. Infers all answers from the task; never interviews. Bootstrap mode scaffolds a fresh clone; augment mode adds toolchain + safeguards when a new language or runtime pattern enters the project; adopt mode ingests an existing ungoverned codebase. Trigger. fresh clone with no PROJECT.md, "new project", "scaffold", "hephaestus", "/hephaestus", a task introducing a language/runtime not declared in PROJECT.md, or "adopt"/"ingest"/"onboard this existing project", or "sync"/"update the kit" to pull base-template updates into a child project.
 ---
 
 # Hephaestus (skill)
@@ -17,6 +17,7 @@ Reference docs (read before emitting anything):
 
 - **Bootstrap** — no `PROJECT.md` at repo root AND no pre-existing source code (fresh clone of the hephaestus base, or empty target dir). Full scaffold.
 - **Augment** — `PROJECT.md` exists and the current task introduces a language, runtime pattern, or deployment change not declared in its frontmatter (e.g. Python CLI grows a Rust+axum API and a TypeScript front end). Emit only the delta, then continue with the task. The session-start drift scan (`.claude/hooks/session-start.sh`) also flags undeclared languages — treat its warning as a mandatory augment trigger before feature work.
+- **Sync** — the user asks to update the kit ("sync hephaestus", "update the kit"). Fetch the base template from frontmatter `hephaestus_base` (clone to a temp dir); compare its `VERSION` to frontmatter `hephaestus_version`; newer → re-layer ONLY kit paths (`.claude/skills/hephaestus/`, `.claude/hooks/`, `tools/mcp/forge-ref/`, `.mcp.json`) using the adopt collision policy (kit wins on kit paths, project files untouched), run the forge-ref selftest, bump `hephaestus_version`, and report the diff. `hephaestus_base` unreachable or fields absent (legacy project) → say so and stop; never guess a base URL.
 - **Adopt** — the user points at an existing ungoverned project ("adopt <path>"), or code is present with no `PROJECT.md` (a half-finished adoption resuming). Full workflow in `references/adopt.md`. Direction is copy-IN: the external project (including its `.git`) is copied into this hephaestus clone, replacing template history; the original folder stays untouched (rollback = delete the clone). Then: evidence survey → security triage (full-history secrets scan first) → gap analysis → invariant-justified restructure with reference rewriting → middleware suggestion diffs → ARCHITECTURE.md reconstruction → report. Runs on a `hephaestus/adopt` branch with per-phase checkpoints; never rewrites business logic; external instruction files win collisions after absorbing the CLAUDE.md standing rules.
 
 ## Bootstrap workflow
@@ -31,7 +32,7 @@ Check all field bounds and ALL 11 cross-field rules. Resolve violations per sche
 
 ### 3. Clone detachment (base-repo clones only)
 
-If the repo's `origin` points at the hephaestus base template, this is a child project: remove or re-point the remote (`git remote rm origin`), and note it in the decisions report. Never push a child project to the template remote.
+If the repo's `origin` points at the hephaestus base template, this is a child project: record that URL into frontmatter `hephaestus_base` FIRST, then remove or re-point the remote (`git remote rm origin`), and note both in the decisions report. Never push a child project to the template remote. Also stamp `hephaestus_version` from the base repo's `VERSION` file. Adopt mode does the same during Phase 0.
 
 ### 4. Emit
 

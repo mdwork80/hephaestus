@@ -57,6 +57,8 @@ Multi-language semantics: EVERY entry in `languages` gets its full toolchain blo
 | `ai_tooling` | enum | `none` `dev_only` `runtime_inference` `agentic` | `dev_only` |
 | `review_cadence_days` | int | 30–730 | `180` |
 | `last_reviewed` | date | ISO `YYYY-MM-DD` | today (generation date) |
+| `hephaestus_version` | str, OPTIONAL | semver `^\d+\.\d+\.\d+$` | base repo's `VERSION` at scaffold time; bootstrap/adopt always write it, legacy projects may lack it |
+| `hephaestus_base` | str, OPTIONAL | 1–300 chars, URL or path of the base template | recorded from `origin` before clone detachment; sync mode fetches updates from it |
 
 `last_reviewed` semantics: CI cadence check fails when today > `last_reviewed` + `review_cadence_days`. An update/regeneration is not a review — preserve the existing date when regenerating over an existing project.
 
@@ -121,6 +123,9 @@ license: <str>
 ai_tooling: <enum>
 review_cadence_days: <int>
 last_reviewed: <YYYY-MM-DD>
+
+hephaestus_version: <semver>
+hephaestus_base: <url-or-path>
 ---
 ```
 
