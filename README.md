@@ -22,7 +22,7 @@ Already have a project with no scaffolding? **Adopt mode** ingests it — see [A
 | `CLAUDE.md` | Standing rules the assistant loads every session: bootstrap on fresh clone, adopt on existing code, augment on new language, governance non-negotiables |
 | `.claude/skills/hephaestus/` | The scaffolder: workflow (`SKILL.md`) + governance schema, file matrix, and security invariants (`references/`) |
 | `.claude/skills/caveman*`, `cavecrew/` | Optional token-compression communication suite |
-| `.claude/hooks/session-start.sh` | Session hook: activates compressed mode, scans for scaffold drift (undeclared languages), warns on missing MCP runtimes |
+| `.claude/hooks/session-start.sh` / `.ps1` | Session hook (bash + PowerShell ports, identical output): activates compressed mode, runs the forge-ref selftest, dispatches bootstrap/adopt/augment notices, warns on missing MCP runtimes |
 | `.mcp.json` | MCP server registry (see below) |
 | `tools/mcp/forge-ref/` | Zero-dependency python3 MCP server serving canonical deep templates + frontmatter validation |
 | `tools/project-forge/` | Legacy Copier template (gitignored reference source; not used for generation) |
@@ -48,6 +48,14 @@ cd my-new-project
 claude
 # state your first task; scaffold happens first, task second
 ```
+
+**Windows without bash:** the session hook has a PowerShell port. In `.claude/settings.json`, change the SessionStart hook command to:
+
+```
+powershell -NoProfile -ExecutionPolicy Bypass -File .claude/hooks/session-start.ps1
+```
+
+(If Git for Windows is installed, `bash` is usually on PATH and the default works as-is.)
 
 The scaffolder detaches `origin` during bootstrap so you never push a child project back to this template.
 
@@ -82,7 +90,7 @@ Everything load-bearing is markdown, JSON, and a bash script — nothing is Clau
 
 1. **Instructions** — `CLAUDE.md` + `.claude/skills/hephaestus/SKILL.md` + its `references/*.md` become your tool's instruction file(s).
 2. **MCP servers** — `.mcp.json` becomes your tool's MCP config (same servers, same commands, different key names).
-3. **The session hook** — no other tool has session hooks; run `bash .claude/hooks/session-start.sh` manually at session start (it prints the same bootstrap/augment/drift notices), or fold its checks into your instruction file.
+3. **The session hook** — no other tool has session hooks; run `bash .claude/hooks/session-start.sh` manually at session start (it prints the same bootstrap/adopt/augment/drift notices), or fold its checks into your instruction file. Windows: use the PowerShell port, `powershell -NoProfile -ExecutionPolicy Bypass -File .claude/hooks/session-start.ps1` (works on Windows PowerShell 5.1 and pwsh 7).
 
 Concept map:
 

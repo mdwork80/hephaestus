@@ -15,7 +15,7 @@ This repository is the base template for all new projects: it gets `git clone`d,
 
 - `.claude/skills/hephaestus/` — the scaffolder (SKILL.md + schema/file-matrix/invariants references)
 - `.claude/skills/caveman*`, `cavecrew/` — communication compression suite
-- `.claude/hooks/session-start.sh` — caveman activation + scaffold drift scan
+- `.claude/hooks/session-start.sh` (+ `.ps1` PowerShell port, identical output) — caveman activation + scaffold drift scan; Windows machines without bash point settings.json at the .ps1
 - `tools/mcp/forge-ref/` — MCP server (zero-dep python3, registered in `.mcp.json`) serving canonical deep templates (Docker, CI/CD, FastAPI/axum middleware) + `validate_frontmatter`; hephaestus consults it before free-generating those artifacts.
 - `.mcp.json` also registers IaC servers (user approval required, per-machine runtimes): `bicep` (Azure.Bicep.McpServer, dotnet dnx / .NET 10) for all Bicep authoring + compile checks, `terraform` (hashicorp image, docker), `aws-iac` (awslabs, uvx) for CDK + CDK-Nag. Missing runtimes → session-start hook warns; fall back to prose per invariants.md.
 - `tools/project-forge/` — legacy Copier template (reference source; do not use for generation); `.gitignore`d
