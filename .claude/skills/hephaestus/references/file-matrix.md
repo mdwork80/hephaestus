@@ -1,6 +1,6 @@
 # File matrix — what to emit under which answers
 
-Replaces the Copier template's Jinja-conditional filenames. Resolve top-to-bottom against the validated answers; the union of matched rows is the file plan shown to the user before writing. `<pkg>` = slug with underscores. Language-specific artifact names come from `invariants.md` §Language mapping (e.g. "manifest" = `pyproject.toml` / `Cargo.toml` / `package.json` / `go.mod` / `*.csproj` / `*.psd1`).
+Replaces the Copier template's Jinja-conditional filenames. Resolve top-to-bottom against the validated answers; the union of matched rows is the file plan. `<pkg>` = slug with underscores, adjusted per language convention. Language-specific artifact names come from `invariants.md` §Language mapping (e.g. "manifest" = `pyproject.toml` / `Cargo.toml` / `package.json` / `go.mod` / `*.csproj` / `*.psd1`). "Language scaffold" and language-gated rows apply once PER entry in `languages`; runtime-pattern rows apply once per entry in `runtime_patterns`, emitted in the language that implements that pattern.
 
 ## Always (every project, every language)
 
@@ -27,7 +27,7 @@ Replaces the Copier template's Jinja-conditional filenames. Resolve top-to-botto
 | File | Condition |
 |---|---|
 | Manifest + pinned-toolchain marker (`.python-version`, `rust-toolchain.toml`, `.nvmrc`, `go.mod` version, …) | always |
-| `src/<pkg>/` (or language-idiomatic layout) with entrypoint, config loader, error handling | always; entrypoint omitted when `runtime_pattern: library` |
+| `src/<pkg>/` (or language-idiomatic layout) with entrypoint, config loader, error handling | always; entrypoint omitted when the language only serves `library` |
 | Config loader module | always — implements the three-layer resolution (defaults → default.toml → env with `SLUG_UPPER_`/`__`) |
 | Test suite: config-loading test + smoke test | always |
 | Lint/format/SAST config (in manifest or dotfiles) | always, per invariants.md §Language mapping |
@@ -75,5 +75,33 @@ Replaces the Copier template's Jinja-conditional filenames. Resolve top-to-botto
 
 ## Post-generation artifacts (created by tasks, not written by hand)
 
-- Lockfile (`uv.lock`, `Cargo.lock`, `package-lock.json`, `go.sum`, …)
+- Lockfile (`uv.lock`, `Cargo.lock`, `package-lock.json`, `go.sum`, …) — one per language that has one
 - `.secrets.baseline` (detect-secrets)
+
+## Augment deltas (existing project gains a language or runtime pattern)
+
+Emit ONLY what the delta requires; update shared files in place, never regenerate them.
+
+**New language added to `languages`:**
+
+| Artifact | Action |
+|---|---|
+| Manifest + toolchain pin marker + `src/` layout + config loader + tests | create (Language scaffold rows for the new language) |
+| `.pre-commit-config.yaml` | append the new language's lint/format/SAST/audit/lockfile-drift block |
+| `.github/workflows/ci.yml` | add the new language's jobs (lint, SAST, test matrix, dep audit, locked install) |
+| `.github/dependabot.yml` | add the new package ecosystem |
+| `.gitignore` | append language-idiomatic entries |
+| `Dockerfile`/`compose.yaml` (if containerized) | new build stage or sidecar service — decide by whether the new language is part of the same deployable or a separate one; record in ARCHITECTURE.md |
+| In-project validator + logic-ref checker | extend accepted `languages` list; scanner covers the new source extensions |
+| `PROJECT.md` | add to `languages`; do NOT touch `last_reviewed` |
+
+**New runtime pattern added to `runtime_patterns`:**
+
+| Artifact | Action |
+|---|---|
+| Pattern artifacts (middleware stack, health/ready, auth stub for web/api; entrypoint skeleton for worker/job) | create in the implementing language |
+| `config/default.toml` + `.env.example` | append the pattern's sections (`[server]`, …) |
+| Re-run cross-field rules on merged answers | Rule 8 (auth none × networked pattern) and Rule 10 are the usual casualties — auto-resolve safer, report |
+| `PROJECT.md` | add to `runtime_patterns` |
+
+**Deployment change (`local_only` → azure/hybrid):** emit the Containerized + Azure sections wholesale; re-check Rules 1, 3, 8, 11; `secrets_backend: dotenv_local` becomes invalid (Rule 3) — upgrade to `key_vault`/`hybrid` and report.

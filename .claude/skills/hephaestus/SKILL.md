@@ -1,65 +1,78 @@
 ---
 name: hephaestus
-description: Scaffold a new project with security-by-default governance — validated PROJECT.md frontmatter, secrets hygiene, pre-commit gates, hardened containers, CI — in ANY programming or scripting language. Pure-prose successor to the Copier template in tools/project-forge. Trigger. "new project", "scaffold", "hephaestus", "forge a project", "/hephaestus".
+description: Zero-question project scaffolder with security-by-default governance — validated PROJECT.md frontmatter, secrets hygiene, pre-commit gates, hardened containers, CI — in ANY programming or scripting language. Infers all answers from the task; never interviews. Bootstrap mode scaffolds a fresh clone; augment mode adds toolchain + safeguards when a new language or runtime pattern enters the project. Trigger. fresh clone with no PROJECT.md, "new project", "scaffold", "hephaestus", "/hephaestus", or a task introducing a language/runtime not declared in PROJECT.md.
 ---
 
 # Hephaestus (skill)
 
-Generate a complete, governed project scaffold from a structured intake. No Copier, no Jinja, no Python scripts required at generation time. The governance contract (frontmatter schema + cross-field rules) and the security invariants are documented here as prose; you apply them idiomatically in whatever language the user picks.
+Generate or extend a governed project scaffold with **zero questions**. You are the developer: infer every answer from the user's task, the repository state, and the schema defaults; apply the cross-field rules; emit the scaffold; report the decisions afterward. Never run an intake interview — `AskUserQuestion` is not part of this skill.
 
 Reference docs (read before emitting anything):
 
-- `references/schema.md` — frontmatter fields, enums, validation bounds, 11 cross-field rules. The contract.
-- `references/file-matrix.md` — which files to emit under which answers.
+- `references/schema.md` — frontmatter fields, defaults, inference sources, 11 cross-field rules. The contract.
+- `references/file-matrix.md` — which files to emit under which answers; augment deltas.
 - `references/invariants.md` — security/config invariants each artifact must satisfy, with per-language mapping guidance.
 
-## Workflow
+## Mode selection
 
-### 1. Intake
+- **Bootstrap** — no `PROJECT.md` at repo root (fresh clone of the hephaestus base, or empty target dir). Full scaffold.
+- **Augment** — `PROJECT.md` exists and the current task introduces a language, runtime pattern, or deployment change not declared in its frontmatter (e.g. Python CLI grows a Rust+axum API and a TypeScript front end). Emit only the delta, then continue with the task. The session-start drift scan (`.claude/hooks/session-start.sh`) also flags undeclared languages — treat its warning as a mandatory augment trigger before feature work.
 
-Collect the frontmatter fields defined in `references/schema.md`. Use `AskUserQuestion` in small batches (identity → classification → deployment/runtime → security posture → governance). Rules:
+## Bootstrap workflow
 
-- Apply the defaults from schema.md; only ask what matters. If the user gave answers up front (e.g. "python CLI, local only, internal data"), fill from that and only ask for gaps.
-- `primary_language` is **free-form**: any programming or scripting language (python, rust, go, typescript, dotnet, powershell, bash, ruby, …). Normalize to a lowercase identifier.
-- Derive, don't ask: `project_slug` from `project_name` (kebab-case), package/crate/module name from slug (underscores), `last_reviewed` = today.
-- Also collect the generation-only options (not frontmatter): `network_exposure`, `image_signing`, ssh scaffolding — see schema.md §Generation-only options. Only prompt when their `when` condition holds.
+### 1. Infer
 
-### 2. Validate
+Resolve every frontmatter field from, in priority order: (a) the user's task statement, (b) repository/environment context (`git config user.name` for owner, directory name for project name), (c) schema.md defaults. "Build a python CLI that syncs dotfiles" carries `languages: [python]`, `runtime_patterns: [cli]`, name, description — the rest is defaults. Also resolve generation-only options (`network_exposure`, `image_signing`, `ssh_scaffold`) per their relevance conditions.
 
-Before writing anything, check every answer against the field bounds and ALL cross-field rules in schema.md. On violation, don't error out — explain the rule and re-ask (e.g. "regulated data forbids dotenv_local; pick key_vault or hybrid"). Auto-correct where the rule implies the fix: confidential/regulated data, any real compliance scope, or agentic AI tooling ⇒ set `threat_model_required: true` and tell the user.
+### 2. Validate + auto-resolve
 
-### 3. Plan and confirm
+Check all field bounds and ALL 11 cross-field rules. Resolve violations per schema.md §Resolution policy: rules 4/9 force `threat_model_required: true`; everything else resolves toward the safer value. Record every auto-resolution for the decisions report. Do not ask; only stop on genuinely contradictory explicit user statements.
 
-Resolve the file list from `references/file-matrix.md` for the validated answers. Show the user the target directory and the file tree you intend to create. Get confirmation before writing (creating a project is many files; don't surprise).
+### 3. Clone detachment (base-repo clones only)
+
+If the repo's `origin` points at the hephaestus base template, this is a child project: remove or re-point the remote (`git remote rm origin`), and note it in the decisions report. Never push a child project to the template remote.
 
 ### 4. Emit
 
-Write every file in the resolved list. For each artifact, satisfy the invariants in `references/invariants.md` — they are requirements, not suggestions. General emission rules:
+Resolve the file list from `references/file-matrix.md`; write every file, satisfying every invariant in `references/invariants.md` — requirements, not suggestions:
 
-- **PROJECT.md frontmatter is the contract.** Emit exact YAML frontmatter per schema.md §Frontmatter layout. Everything else adapts per language; this does not.
-- **Idiomatic per language.** Use the language's native tooling for lockfiles, linting, SAST, and packaging (see invariants.md §Language mapping). Never bolt Python tooling onto a non-Python project.
-- **Config over hard-coding.** Three layers: code defaults → committed `config/default.toml` (no secrets) → env vars/`.env` (secrets, gitignored). Env prefix = `SLUG_UPPER_` with `__` as the nesting delimiter.
-- **Validator ships with the project.** Generate a frontmatter validator in the project's own language (or its natural scripting companion) implementing every field bound and cross-field rule from schema.md, plus a `--check-cadence` mode (fail when today > `last_reviewed` + `review_cadence_days`). Wire it into pre-commit and CI. The generated project must validate itself offline with zero dependence on this skill.
-- **Docstring/logic-ref protocol.** Every generated PROJECT.md includes the Code Documentation Protocol section (Layer 1 docstrings with `@logic-ref` IDs, Layer 2 `docs/ARCHITECTURE.md`, Layer 3 integrity check). Generate the integrity checker in the project's language alongside the validator.
+- **PROJECT.md frontmatter is the contract.** Exact YAML per schema.md §Frontmatter layout. Everything else adapts per language; this does not.
+- **Idiomatic per language, for EVERY language in `languages`.** Native lockfiles, lint, SAST, dep audit per invariants.md §Language mapping. Never bolt Python tooling onto a non-Python project.
+- **Config over hard-coding.** Code defaults → committed `config/default.toml` (no secrets) → env vars/`.env` (gitignored). Prefix `SLUG_UPPER_`, `__` nesting.
+- **Validator ships with the project** in the primary language: all schema bounds + 11 rules + `--check-cadence` + the manifest-vs-frontmatter language drift check. Wired into pre-commit and CI. Self-validating offline, zero dependence on this skill.
+- **Docstring/logic-ref protocol** section in PROJECT.md; integrity checker generated alongside the validator.
 
 ### 5. Post-generation tasks
 
-Run in the new project directory, via Bash. Each task: run it if the tool is installed; if absent, skip and list it in a "manual follow-ups" note at the end. Never fail the scaffold over a missing local tool.
+Run via Bash in the project dir. Tool present → run; absent → skip and list under "manual follow-ups". Never fail the scaffold over a missing local tool.
 
-1. Generate the lockfile with the language's native tool (`uv lock`, `cargo generate-lockfile`, `npm install --package-lock-only`, `go mod tidy`, …). Interpreted-without-lockfile languages (bash, powershell): skip, note why.
-2. `detect-secrets scan --all-files > .secrets.baseline` (via `uv run --with detect-secrets` or `pipx run` if not installed directly).
-3. Run the generated frontmatter validator against the generated PROJECT.md. This one is NOT optional — if the validator can't run (missing runtime), validate the frontmatter yourself against schema.md and say you did.
-4. Offer (don't assume): `git init -b main` + initial commit, `pre-commit install`.
+1. Lockfile per language (`uv lock`, `cargo generate-lockfile`, `npm install --package-lock-only`, `go mod tidy`, …).
+2. `detect-secrets scan --all-files > .secrets.baseline` (direct, `uv run --with detect-secrets`, or `pipx run`).
+3. Run the generated frontmatter validator against the generated PROJECT.md. NOT optional — if its runtime is missing, validate manually against schema.md and say so.
+4. `pre-commit install` if pre-commit is available; initial commit only if the user asked for one.
 
-### 6. Verify
+### 6. Report (replaces confirmation)
 
-Confirm to the user: files written (tree), tasks run vs. skipped, validator result, and next steps (install deps, run tests, replace LICENSE placeholder if Proprietary wasn't chosen).
+No pre-write confirmation — this skill acts, then reports. End with:
+
+- **Decisions table**: field → value → source (`inferred` / `default` / `auto-corrected: <rule>`).
+- File tree written; tasks run vs. skipped; validator result.
+- Corrections invited: any wrong inference, state it and hephaestus re-runs as an augment/fix pass.
+
+## Augment workflow
+
+1. Read current `PROJECT.md` frontmatter. Compute the delta the task implies: new `languages` entries, new `runtime_patterns`, changed `deployment_target`/`auth_model`/etc.
+2. Re-validate the MERGED answer set against all 11 rules (a new `api_service` pattern on a non-local deployment invalidates `auth_model: none` — Rule 8; auto-resolve to `api_key` and report).
+3. Emit only missing artifacts per file-matrix.md §Augment deltas: new language toolchain blocks (manifest, lint/SAST/audit hooks, CI jobs, Dockerfile stage), new pattern artifacts (middleware stack, health endpoints), updated frontmatter (`languages`, `runtime_patterns`, NOT `last_reviewed` — an augment is not a review).
+4. Update, never regenerate, existing files: append language blocks to `.pre-commit-config.yaml`, add CI jobs, extend `.gitignore`, extend the in-project validator's language list.
+5. Post-gen tasks for the new language only; then the decisions report (delta form); then continue with the user's actual feature task.
 
 ## Principles
 
-- **Invariants, not templates.** The old Copier template hard-gated on python/rust. This skill documents *what must be true* of each artifact; any language satisfying the invariants is a valid scaffold. That's how "any language" stays cheap.
-- **Schema rules are governance decisions.** Do not relax, reorder, or "improve" a cross-field rule during intake. Changing a rule = editing `references/schema.md` deliberately, in its own commit.
-- **No update mechanism.** Unlike `copier update`, re-running this skill on an existing project regenerates; warn the user and diff before overwriting anything that exists.
+- **Never interview.** Infer, default, auto-resolve toward safety, report after. The user corrects the report; corrections are cheaper than interrogations.
+- **Invariants, not templates.** Any language satisfying invariants.md is a valid scaffold — that keeps "any language" cheap.
+- **Schema rules are governance decisions.** Never relax or reorder a cross-field rule during a scaffold. Rule changes edit `references/schema.md` in their own commit.
+- **Regeneration warns.** Re-running bootstrap over an existing scaffold: diff first, show what would be overwritten, preserve `last_reviewed`.
 
 ## Deep-template reference points (roadmap note)
 

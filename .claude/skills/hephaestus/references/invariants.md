@@ -105,9 +105,9 @@ Pick the ecosystem-standard tool per role; if a role has no ecosystem tool, note
 | Dep audit | pip-audit | cargo-deny (advisories/licenses/sources) | npm audit / osv-scanner | govulncheck | dotnet list package --vulnerable | n/a |
 | Types | mypy | rustc | tsc --strict | rustc-equiv builtin | builtin | n/a |
 | Config stack | pydantic-settings | config crate + serde | zod + dotenv-style loader | viper or koanf | Microsoft.Extensions.Configuration | env + parsing functions |
-| Web framework | FastAPI | axum + tower-http | Fastify | net/http + chi, or Gin/Echo | ASP.NET minimal APIs | n/a — re-ask runtime_pattern |
+| Web framework | FastAPI | axum + tower-http | Fastify | net/http + chi, or Gin/Echo | ASP.NET minimal APIs | n/a — assign web patterns to another language in `languages` |
 | Structured logging | stdlib logging/structlog JSON | tracing + tracing-subscriber | pino | slog | Microsoft.Extensions.Logging JSON | Write-Information + transcript |
 | Test | pytest | cargo test | vitest/node:test | go test | xUnit | Pester / bats |
-| Validator + logic-ref checker language | python | rust (src/bin/) | typescript | go | C# | powershell; bash projects may use any available scripting runtime — ask |
+| Validator + logic-ref checker language | python | rust (src/bin/) | typescript | go | C# | powershell; bash projects use the most available scripting runtime (python3 if present, else bash) — record choice in ARCHITECTURE.md |
 
 Toolchain pin markers: `.python-version`, `rust-toolchain.toml`, `.nvmrc`/`engines`, `go.mod` go-directive, `global.json`, `#Requires -Version`.
