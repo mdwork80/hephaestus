@@ -1,0 +1,277 @@
+name: CI
+
+# Runs on every push and every PR. Fast gates (Python linting, typing, tests)
+# run on every branch push; heavier gates (security scanning, container build,
+# Bicep compile) run on PR into main.
+#
+# All third-party actions are SHA-pinned. Dependabot will propose updates;
+# those PRs should be reviewed before merging to confirm the new SHA points
+# at an expected version tag.
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: [main]
+
+# Default to read-only permissions. Individual jobs elevate as needed.
+permissions:
+  contents: read
+
+# Cancel in-progress runs on the same ref when a new push arrives. Saves
+# minutes on pushes that happen faster than CI completes.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ==========================================================================
+  # Fast Python gates: ruff, mypy, pytest, frontmatter validator, uv lock check.
+  # Matrix over Python 3.11 (floor) and 3.14 (latest).
+  # ==========================================================================
+  python-gates:
+    name: Python gates (${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.14']
+    steps:
+      - name: Harden runner
+        # Egress monitoring for the CI runner (audit mode: reports outbound
+        # calls without blocking). To promote to egress-policy: block with a
+        # per-job allowed-endpoints list, see SECURITY.md "Continuous-integration
+        # egress (harden-runner)".
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411  # v2.19.4
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0  # v6.0.3
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # v8.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: 'uv.lock'
+
+      - name: Set up Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: Sync dependencies (hash-verified)
+        run: uv sync --all-extras --frozen
+
+      - name: Verify uv.lock is in sync with pyproject.toml
+        run: uv lock --check
+
+      - name: Validate PROJECT.md frontmatter (+ review cadence)
+        # --check-cadence fails when the review is older than review_cadence_days.
+        # Review PROJECT.md and set last_reviewed to today to clear it.
+        run: uv run python _schema/validate_frontmatter.py --check-cadence PROJECT.md
+
+      - name: Documentation integrity (logic-ref check)
+        # Layer 3 of the Code Documentation Protocol; pure stdlib, offline.
+        run: uv run python scripts/logic_ref_check.py --root .
+
+      - name: Lint (ruff)
+        run: uv run ruff check .
+
+      - name: Format check (ruff)
+        run: uv run ruff format --check .
+
+      - name: Type check (mypy)
+        run: uv run mypy src
+
+      - name: Tests (pytest)
+        run: uv run pytest -v
+
+  # ==========================================================================
+  # Security gates: SAST, dependency audit, secret scanning.
+  # PR-only; adds ~1-2 minutes that aren't worth running on every branch push.
+  # ==========================================================================
+  security-gates:
+    name: Security gates
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      # gitleaks queries the GitHub API for PR commit metadata when running
+      # in PR context; without this it gets 403. Scoped to the one job that
+      # needs it rather than granted at workflow level.
+      pull-requests: read
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411  # v2.19.4
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0  # v6.0.3
+        with:
+          # Fetch full history so gitleaks can scan all commits in the PR.
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # v8.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: 'uv.lock'
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Sync dependencies
+        run: uv sync --all-extras --frozen
+
+      - name: Bandit (Python SAST)
+        run: uv run bandit -c pyproject.toml -r src
+
+      - name: pip-audit (dependency vulnerability scan)
+        # Add documented --ignore-vuln entries here only with a dated rationale
+        # in SECURITY.md, and re-evaluate them periodically.
+        run: uv run pip-audit
+
+      - name: Generate SBOM (CycloneDX)
+        run: uv run cyclonedx-py environment --output-file sbom.json --of JSON
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: sbom-python
+          path: sbom.json
+          if-no-files-found: error
+
+      - name: detect-secrets
+        run: |
+          if [ -f .secrets.baseline ]; then
+            uv run --with detect-secrets detect-secrets scan --baseline .secrets.baseline
+          else
+            echo "No .secrets.baseline present. Run 'detect-secrets scan > .secrets.baseline' locally and commit." >&2
+            exit 1
+          fi
+
+      - name: Gitleaks (secret scanning across history)
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e  # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#IF containerized
+
+  # ==========================================================================
+  # Container gates: Dockerfile lint, build, non-root verification.
+  # PR-only; docker build costs minutes.
+  # ==========================================================================
+  container-gates:
+    name: Container gates
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411  # v2.19.4
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0  # v6.0.3
+
+      - name: Lint Dockerfile (hadolint)
+        uses: hadolint/hadolint-action@2332a7b74a6de0dda2e2221d575162eba76ba5e5  # v3.3.0
+        with:
+          dockerfile: Dockerfile
+          no-fail: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4.1.0
+
+      - name: Build image
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.2.0
+        with:
+          context: .
+          push: false
+          load: true
+          tags: ci-image:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Scan image for vulnerabilities (Trivy)
+        # Fails on FIXABLE High/Critical CVEs. Unfixed CVEs are skipped (no
+        # action available); accept specific findings via .trivyignore with a
+        # dated rationale (mirrors the pip-audit / SECURITY.md pattern).
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8  # v0.36.0
+        with:
+          image-ref: ci-image:${{ github.sha }}
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          trivyignores: .trivyignore
+
+      - name: Verify non-root user
+        run: |
+          IMAGE_UID=$(docker run --rm ci-image:${{ github.sha }} id -u)
+          if [ "$IMAGE_UID" != "10001" ]; then
+            echo "Image runs as UID $IMAGE_UID, expected 10001" >&2
+            exit 1
+          fi
+          echo "OK: image runs as UID 10001"
+
+      - name: Verify build tooling absent from runtime image
+        run: |
+          if docker run --rm --entrypoint sh ci-image:${{ github.sha }} -c "command -v uv" 2>/dev/null; then
+            echo "FAIL: uv present in runtime image" >&2
+            exit 1
+          fi
+          echo "OK: build tooling not present in runtime image"
+
+      - name: Verify no secrets or dev artifacts in image
+        run: |
+          if docker run --rm --entrypoint sh ci-image:${{ github.sha }} -c "ls /app/.env /app/tests /app/.git 2>/dev/null"; then
+            echo "FAIL: .env, tests, or .git leaked into image" >&2
+            exit 1
+          fi
+          echo "OK: no leaked artifacts"
+#ENDIF
+#IF azure
+
+  # ==========================================================================
+  # Infrastructure gates: Bicep compile + lint.
+  # Offline-only; does not connect to Azure or deploy anything.
+  # ==========================================================================
+  infra-gates:
+    name: Infrastructure gates
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411  # v2.19.4
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0  # v6.0.3
+
+      - name: Install Azure CLI
+        # Ubuntu runners ship with az CLI; this ensures a recent Bicep.
+        run: |
+          az --version
+          az bicep install
+          az bicep version
+
+      - name: Compile Bicep
+        run: az bicep build --file infra/main.bicep
+
+      - name: Lint Bicep
+        run: |
+          # bicep lint exits non-zero on errors; warnings are non-fatal but reported.
+          az bicep lint --file infra/main.bicep
+
+      - name: IaC security scan (Checkov)
+        # Static analysis of the COMPILED ARM (infra/main.json, written by the
+        # bicep build above) so every module is resolved into one template and
+        # no parameter values are required. Intentional choices are suppressed
+        # with a documented rationale in .checkov.yaml; remove an entry there to
+        # start enforcing that rule.
+        run: |
+          az bicep build --file infra/main.bicep --outfile infra/main.json
+          python3 -m pip install --quiet "checkov==3.3.1"
+          checkov -f infra/main.json --framework arm --config-file .checkov.yaml
+#ENDIF

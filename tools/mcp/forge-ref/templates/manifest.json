@@ -1,0 +1,165 @@
+{
+  "_comment": "Registry of canonical deep-template assets. `vars` are ${name} substitutions (project_slug is required everywhere it appears; slug_upper and pkg are derived from it automatically). `flags` gate #IF/#ELIF/#ELSE/#ENDIF blocks; unlisted flags default to false. Bicep assets deliberately absent: Azure IaC comes from the dedicated Bicep MCP server integration.",
+  "templates": {
+    "docker-python": {
+      "path": "docker/python.dockerfile",
+      "category": "docker",
+      "output": "Dockerfile",
+      "description": "Hardened multi-stage Python Dockerfile: uv frozen sync, digest-pinned base, non-root UID 10001, tini PID 1, stdlib healthcheck, pip stripped from runtime.",
+      "vars": ["project_name", "project_slug"],
+      "flags": ["is_web"]
+    },
+    "docker-rust": {
+      "path": "docker/rust.dockerfile",
+      "category": "docker",
+      "output": "Dockerfile",
+      "description": "Hardened multi-stage Rust Dockerfile: cargo --locked release build, digest-pinned base, non-root UID 10001, tini PID 1, binary healthcheck subcommand.",
+      "vars": ["project_name", "project_slug"],
+      "flags": ["is_web", "ssh_server"]
+    },
+    "compose": {
+      "path": "docker/compose.yaml",
+      "category": "docker",
+      "output": "compose.yaml",
+      "description": "Dev compose with prod-parity hardening: read-only rootfs, no-new-privileges, cap_drop ALL, tmpfs /tmp, localhost-only port binding, resource limits.",
+      "vars": ["project_name", "project_slug"],
+      "flags": ["is_web"]
+    },
+    "dockerignore": {
+      "path": "docker/dockerignore",
+      "category": "docker",
+      "output": ".dockerignore",
+      "description": "Minimal-context .dockerignore: excludes VCS, secrets, envs, build artifacts, tests, docs, IaC, SBOMs.",
+      "vars": [],
+      "flags": []
+    },
+    "ci-python": {
+      "path": "ci/ci-python.yml",
+      "category": "ci",
+      "output": ".github/workflows/ci.yml",
+      "description": "SHA-pinned CI for Python: ruff/mypy/pytest matrix, frontmatter + logic-ref gates, bandit, pip-audit, SBOM, detect-secrets, gitleaks; container gates behind `containerized`, Bicep gates behind `azure`.",
+      "vars": [],
+      "flags": ["containerized", "azure"]
+    },
+    "ci-rust": {
+      "path": "ci/ci-rust.yml",
+      "category": "ci",
+      "output": ".github/workflows/ci.yml",
+      "description": "SHA-pinned CI for Rust: fmt/clippy/build/test --locked, governance binaries, cargo-audit/deny, SBOM, detect-secrets, gitleaks; container gates behind `containerized`, Bicep gates behind `azure`.",
+      "vars": [],
+      "flags": ["containerized", "azure"]
+    },
+    "deploy": {
+      "path": "ci/deploy.yml",
+      "category": "ci",
+      "output": ".github/workflows/deploy.yml",
+      "description": "Azure deploy via federated identity (OIDC, no long-lived secrets): what-if preview, cosign verify gate behind `cosign`, output extraction + /health smoke test steered by network flags.",
+      "vars": ["project_slug"],
+      "flags": ["cosign", "is_web", "smoke_test", "private_front_door", "private_app_gateway", "private_internal"]
+    },
+    "release": {
+      "path": "ci/release.yml",
+      "category": "ci",
+      "output": ".github/workflows/release.yml",
+      "description": "GHCR publish + cosign keyless signing + CycloneDX SBOM attestation + SLSA provenance attestation. Verbatim; no vars or flags.",
+      "vars": [],
+      "flags": []
+    },
+    "fastapi-app": {
+      "path": "middleware/fastapi/app.py",
+      "category": "middleware-fastapi",
+      "output": "src/<pkg>/app.py",
+      "description": "FastAPI app factory with ordered middleware stack (trusted host, size limit, optional CORS, request-id, security headers), prod-gated docs URLs, request-id log enrichment.",
+      "vars": ["project_name", "project_slug"],
+      "flags": ["has_cors"]
+    },
+    "fastapi-request-id": {
+      "path": "middleware/fastapi/request_id.py",
+      "category": "middleware-fastapi",
+      "output": "src/<pkg>/middleware/request_id.py",
+      "description": "Request-ID middleware: contextvar-bound UUID, sanitized client-supplied IDs, X-Request-ID response header, logging filter.",
+      "vars": [],
+      "flags": []
+    },
+    "fastapi-security": {
+      "path": "middleware/fastapi/security.py",
+      "category": "middleware-fastapi",
+      "output": "src/<pkg>/middleware/security.py",
+      "description": "Security headers middleware (nosniff, DENY, referrer/permissions policy, CSP behind `is_web_app`) + declared Content-Length 413 limiter.",
+      "vars": [],
+      "flags": ["is_web_app"]
+    },
+    "fastapi-health": {
+      "path": "middleware/fastapi/health.py",
+      "category": "middleware-fastapi",
+      "output": "src/<pkg>/routers/health.py",
+      "description": "Liveness (/health, no dependency checks) and readiness (/ready, dependency probes) with the semantic distinction documented.",
+      "vars": [],
+      "flags": []
+    },
+    "fastapi-exceptions": {
+      "path": "middleware/fastapi/exceptions.py",
+      "category": "middleware-fastapi",
+      "output": "src/<pkg>/exceptions.py",
+      "description": "Sanitized exception handlers: full detail to logs with request-id, generic JSON bodies to clients, no stack traces or types leaked.",
+      "vars": [],
+      "flags": []
+    },
+    "fastapi-auth-stub": {
+      "path": "middleware/fastapi/dependencies.py",
+      "category": "middleware-fastapi",
+      "output": "src/<pkg>/dependencies.py",
+      "description": "Fail-loud auth dependency stub with model-specific implementation guidance; raises NotImplementedError, never a fake pass-through. Set exactly one auth_* flag.",
+      "vars": ["project_slug", "auth_model"],
+      "flags": ["auth_entra_id", "auth_api_key", "auth_managed_identity", "auth_mutual_tls"]
+    },
+    "axum-app": {
+      "path": "middleware/axum/app.rs",
+      "category": "middleware-axum",
+      "output": "src/http-adjacent app.rs (see project layout)",
+      "description": "axum Router factory: catch-panic, request-id set/propagate, trace, trusted-host, declared+actual size limits, pinned CORS, security headers, CSP behind `is_web_app`.",
+      "vars": [],
+      "flags": ["is_web_app"]
+    },
+    "axum-middleware": {
+      "path": "middleware/axum/middleware.rs",
+      "category": "middleware-axum",
+      "output": "src/http/middleware.rs",
+      "description": "Trusted-host filter and declared Content-Length 413 limiter returning clean JSON errors.",
+      "vars": [],
+      "flags": []
+    },
+    "axum-routes": {
+      "path": "middleware/axum/routes.rs",
+      "category": "middleware-axum",
+      "output": "src/http/routes.rs",
+      "description": "/health, /ready (semantics documented), /api/v1/status handlers.",
+      "vars": [],
+      "flags": []
+    },
+    "axum-error": {
+      "path": "middleware/axum/error.rs",
+      "category": "middleware-axum",
+      "output": "src/http/error.rs",
+      "description": "Sanitized error responses + structured 404 fallback carrying the request id.",
+      "vars": [],
+      "flags": []
+    },
+    "axum-mod": {
+      "path": "middleware/axum/mod.rs",
+      "category": "middleware-axum",
+      "output": "src/http/mod.rs",
+      "description": "HTTP module wiring; auth module included behind `has_auth`.",
+      "vars": [],
+      "flags": ["has_auth"]
+    },
+    "axum-auth-stub": {
+      "path": "middleware/axum/auth.rs",
+      "category": "middleware-axum",
+      "output": "src/http/auth.rs",
+      "description": "Fail-loud auth extractor stub returning 501 with model-specific guidance. Set exactly one auth_* flag.",
+      "vars": ["auth_model"],
+      "flags": ["auth_entra_id", "auth_api_key", "auth_managed_identity", "auth_mutual_tls"]
+    }
+  }
+}

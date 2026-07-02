@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "forge-ref": {
+      "command": "python3",
+      "args": ["tools/mcp/forge-ref/server.py"]
+    }
+  }
+}

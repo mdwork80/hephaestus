@@ -1,0 +1,218 @@
+name: Deploy to Azure
+
+# Manual-trigger only. This workflow deploys the current main-branch commit
+# to Azure using federated identity. Prerequisite one-time setup is documented
+# in DEPLOYMENT.md.
+#
+# The workflow uses repository Variables (not Secrets) for the Azure identifiers
+# because they are not sensitive on their own:
+#   vars.AZURE_CLIENT_ID        - the app registration's Application ID
+#   vars.AZURE_TENANT_ID        - your Entra tenant's Directory ID
+#   vars.AZURE_SUBSCRIPTION_ID  - the target subscription's ID
+#
+# These values become useless to an attacker without a matching federated
+# credential configured on the app registration in Azure.
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+      container_image:
+        description: 'Full container image reference (e.g., ghcr.io/<owner>/${project_slug}@sha256:<digest>)'
+        required: true
+        type: string
+      region_short:
+        description: 'Short region code used in resource names (e.g., wus3)'
+        required: true
+        default: 'wus3'
+        type: string
+      what_if_only:
+        description: 'Preview only; do not actually deploy'
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  # Required for OIDC token issuance to Azure.
+  id-token: write
+  # Required for actions/checkout.
+  contents: read
+#IF cosign
+  # Required to pull the image signature/attestations from GHCR for the cosign
+  # verification gate below (GHCR packages are private by default).
+  packages: read
+#ENDIF
+
+concurrency:
+  # Only one deployment to a given environment at a time. Subsequent runs
+  # queue rather than cancel, so a rushed second run doesn't abandon the
+  # first mid-deployment.
+  group: deploy-${{ github.event.inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy (${{ github.event.inputs.environment }})
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+    steps:
+      - name: Harden runner
+        # Egress monitoring (audit mode). The deploy job legitimately calls
+        # Azure management endpoints; switch to block with an allow-list once
+        # the egress set is confirmed.
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411  # v2.19.4
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0  # v6.0.3
+
+      - name: Azure login (federated identity)
+        uses: azure/login@93381592711f247e165c389ebb30b596c84cdc48  # v3.0.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Compute resource group name
+        id: rg
+        run: |
+          RG="rg-${project_slug}-${{ github.event.inputs.environment }}-${{ github.event.inputs.region_short }}"
+          echo "name=$RG" >> "$GITHUB_OUTPUT"
+          echo "Resource group: $RG"
+
+      - name: Verify resource group exists
+        run: |
+          RG="${{ steps.rg.outputs.name }}"
+          if ! az group show --name "$RG" >/dev/null 2>&1; then
+            echo "ERROR: Resource group '$RG' does not exist." >&2
+            echo "This workflow targets resource-group scope; the RG must be created once manually." >&2
+            echo "See DEPLOYMENT.md for one-time setup instructions." >&2
+            exit 1
+          fi
+          echo "OK: resource group exists."
+#IF cosign
+
+      - name: Log in to GHCR (for signature pull)
+        # GHCR packages are private by default; cosign needs registry auth to
+        # read the signature/attestations. Harmless if the package is public.
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee  # v4.2.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6  # v4.1.2
+
+      - name: Verify image signature + SBOM attestation (cosign keyless)
+        # Fails the deploy unless the image was signed by THIS repo's release
+        # workflow via Sigstore keyless. Deploy by DIGEST (ghcr.io/<owner>/<repo>
+        # @sha256:...) for a tamper-proof reference. See DEPLOYMENT.md.
+        run: |
+          IMAGE="${{ github.event.inputs.container_image }}"
+          IDENTITY="^https://github.com/${{ github.repository }}/.github/workflows/release.yml@"
+          ISSUER="https://token.actions.githubusercontent.com"
+          echo "Verifying signature for $IMAGE"
+          cosign verify \
+            --certificate-identity-regexp "$IDENTITY" \
+            --certificate-oidc-issuer "$ISSUER" \
+            "$IMAGE" > /dev/null
+          echo "Verifying CycloneDX SBOM attestation"
+          cosign verify-attestation --type cyclonedx \
+            --certificate-identity-regexp "$IDENTITY" \
+            --certificate-oidc-issuer "$ISSUER" \
+            "$IMAGE" > /dev/null
+          echo "Verifying SLSA provenance attestation"
+          cosign verify-attestation --type slsaprovenance \
+            --certificate-identity-regexp "$IDENTITY" \
+            --certificate-oidc-issuer "$ISSUER" \
+            "$IMAGE" > /dev/null
+          echo "OK: image is signed and attested by this repo's release workflow."
+#ENDIF
+
+      - name: Preview (what-if)
+        if: github.event.inputs.what_if_only == 'true' || github.event.inputs.what_if_only == true
+        run: |
+          az deployment group what-if \
+            --resource-group "${{ steps.rg.outputs.name }}" \
+            --template-file infra/main.bicep \
+            --parameters infra/main.parameters.json \
+            --parameters containerImage="${{ github.event.inputs.container_image }}" \
+            --parameters environment="${{ github.event.inputs.environment }}" \
+            --parameters regionShort="${{ github.event.inputs.region_short }}"
+
+      - name: Deploy
+        if: github.event.inputs.what_if_only != 'true' && github.event.inputs.what_if_only != true
+        id: deploy
+        run: |
+          az deployment group create \
+            --resource-group "${{ steps.rg.outputs.name }}" \
+            --name "deploy-${{ github.run_id }}" \
+            --template-file infra/main.bicep \
+            --parameters infra/main.parameters.json \
+            --parameters containerImage="${{ github.event.inputs.container_image }}" \
+            --parameters environment="${{ github.event.inputs.environment }}" \
+            --parameters regionShort="${{ github.event.inputs.region_short }}" \
+            --output json > deploy-output.json
+          echo "Deployment complete."
+
+      - name: Extract deployment outputs
+        if: github.event.inputs.what_if_only != 'true' && github.event.inputs.what_if_only != true
+        run: |
+          RG="${{ steps.rg.outputs.name }}"
+          APP_NAME=$(az deployment group show --resource-group "$RG" --name "deploy-${{ github.run_id }}" --query properties.outputs.containerAppName.value -o tsv)
+          echo "Container App: $APP_NAME"
+#IF is_web
+#IF private_front_door
+          URL=$(az deployment group show --resource-group "$RG" --name "deploy-${{ github.run_id }}" --query properties.outputs.publicUrl.value -o tsv)
+          echo "Front Door URL: $URL"
+          echo "::notice::Deployed behind Front Door at $URL"
+#ELIF private_app_gateway
+          IP=$(az deployment group show --resource-group "$RG" --name "deploy-${{ github.run_id }}" --query properties.outputs.publicIpAddress.value -o tsv)
+          echo "Application Gateway IP: $IP"
+          echo "::notice::Deployed behind Application Gateway at http://$IP"
+#ELIF private_internal
+          FQDN=$(az deployment group show --resource-group "$RG" --name "deploy-${{ github.run_id }}" --query properties.outputs.internalFqdn.value -o tsv)
+          echo "Internal FQDN (VNet-only): $FQDN"
+          echo "::notice::Deployed internal-only (no public ingress) at $FQDN"
+#ELSE
+          URL=$(az deployment group show --resource-group "$RG" --name "deploy-${{ github.run_id }}" --query properties.outputs.containerAppUrl.value -o tsv)
+          echo "Container App URL: $URL"
+          echo "::notice::Deployed to $URL"
+#ENDIF
+#ENDIF
+#IF smoke_test
+
+      - name: Smoke test /health endpoint
+        if: github.event.inputs.what_if_only != 'true' && github.event.inputs.what_if_only != true
+        run: |
+          RG="${{ steps.rg.outputs.name }}"
+#IF private_front_door
+          URL=$(az deployment group show --resource-group "$RG" --name "deploy-${{ github.run_id }}" --query properties.outputs.publicUrl.value -o tsv)
+#ELIF private_app_gateway
+          URL="http://$(az deployment group show --resource-group "$RG" --name "deploy-${{ github.run_id }}" --query properties.outputs.publicIpAddress.value -o tsv)"
+#ELSE
+          URL=$(az deployment group show --resource-group "$RG" --name "deploy-${{ github.run_id }}" --query properties.outputs.containerAppUrl.value -o tsv)
+#ENDIF
+          # Edge propagation (Container Apps revision / Front Door / App Gateway
+          # health probe) can take 1-2 min. Retry up to 8 times, 20s apart.
+          for i in 1 2 3 4 5 6 7 8; do
+            echo "Attempt $i: curl $URL/health"
+            if curl -fsS --max-time 15 "$URL/health" > /dev/null; then
+              echo "OK: /health returned 200"
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "FAIL: /health never returned 200" >&2
+          exit 1
+#ENDIF

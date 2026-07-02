@@ -36,7 +36,8 @@ If the repo's `origin` points at the hephaestus base template, this is a child p
 
 Resolve the file list from `references/file-matrix.md`; write every file, satisfying every invariant in `references/invariants.md` — requirements, not suggestions:
 
-- **PROJECT.md frontmatter is the contract.** Exact YAML per schema.md §Frontmatter layout. Everything else adapts per language; this does not.
+- **Deep artifacts come from the forge-ref MCP server first.** Dockerfiles, compose, CI/CD workflows, FastAPI/axum middleware: call `list_templates` / `get_template` on the `forge-ref` server (registered in `.mcp.json`) and use its rendered output verbatim. Free-generate only when no template matches, and say so in the decisions report. Azure IaC (Bicep) comes from the dedicated Bicep MCP server, not forge-ref.
+- **PROJECT.md frontmatter is the contract.** Exact YAML per schema.md §Frontmatter layout. Everything else adapts per language; this does not. Validate with forge-ref's `validate_frontmatter` tool when available.
 - **Idiomatic per language, for EVERY language in `languages`.** Native lockfiles, lint, SAST, dep audit per invariants.md §Language mapping. Never bolt Python tooling onto a non-Python project.
 - **Config over hard-coding.** Code defaults → committed `config/default.toml` (no secrets) → env vars/`.env` (gitignored). Prefix `SLUG_UPPER_`, `__` nesting.
 - **Validator ships with the project** in the primary language: all schema bounds + 11 rules + `--check-cadence` + the manifest-vs-frontmatter language drift check. Wired into pre-commit and CI. Self-validating offline, zero dependence on this skill.
@@ -74,6 +75,8 @@ No pre-write confirmation — this skill acts, then reports. End with:
 - **Schema rules are governance decisions.** Never relax or reorder a cross-field rule during a scaffold. Rule changes edit `references/schema.md` in their own commit.
 - **Regeneration warns.** Re-running bootstrap over an existing scaffold: diff first, show what would be overwritten, preserve `last_reviewed`.
 
-## Deep-template reference points (roadmap note)
+## Deep-template reference points
 
-> **NOTE:** MCP servers will be built and added as reference points for the deep templates. The battle-tested verbatim assets from the Copier template — Bicep infra modules (VNet, private endpoints, Front Door/App Gateway edge), the FastAPI/axum security-middleware stacks, hardened Dockerfiles, and the SHA-pinned CI/CD workflows — are the parts most at risk of drift when regenerated as prose. Until those MCP reference servers exist, treat `references/invariants.md` as the authority for these artifacts and flag to the user that deep Azure infra and web middleware output is prose-generated, not template-verified. When the MCP servers land, consult them first for these artifacts and prefer their canonical output over free generation.
+> **STATUS:** the `forge-ref` MCP server (`tools/mcp/forge-ref/`, registered in `.mcp.json`) now serves the battle-tested deep templates as byte-stable rendered assets: hardened Dockerfiles (python/rust), compose, dockerignore, SHA-pinned CI (python/rust), deploy (OIDC + cosign gate), release (GHCR + Sigstore), and the FastAPI/axum security-middleware stacks — plus a `validate_frontmatter` tool implementing the full schema. Prefer its output over free generation; `references/invariants.md` remains the authority for judging any gap or extension.
+>
+> **PENDING:** Azure IaC (Bicep modules — VNet, private endpoints, Front Door/App Gateway edge) is deliberately NOT in forge-ref; it will come from a dedicated Bicep MCP server integration. Until that lands, Bicep output is prose-generated against invariants.md §Azure infra — flag that to the user whenever emitting infra/.

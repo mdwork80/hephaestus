@@ -1,0 +1,70 @@
+# Local development orchestration for ${project_name}.
+#
+# This file is for `docker compose up` during development. It is NOT a
+# production deployment artifact. Production deploys use the IaC in infra/
+# against Azure Container Apps or the configured target.
+#
+# Security posture for dev parity:
+#   * Read-only root filesystem. Catches filesystem-write bugs early.
+#   * Writable /tmp via tmpfs (for things that legitimately need scratch space).
+#   * No new privileges (prevents suid escalation in the container).
+#   * Secrets loaded from .env, which is gitignored.
+#
+# To run:
+#     docker compose up --build
+# To tear down:
+#     docker compose down
+
+services:
+  ${project_slug}:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ${project_slug}:dev
+    container_name: ${project_slug}
+
+    # Load local environment variables. `.env` is gitignored; copy from
+    # `.env.example` to seed it.
+    env_file:
+      - .env
+
+    # Hardening. These mirror production defaults so "works on my machine"
+    # and "works in prod" stay aligned.
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+    # Writable scratch space. /tmp is needed by some libraries for temp files.
+    # Size is generous for dev; tighten in production.
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+
+#IF is_web
+    # Bind the configured port to localhost only. Do not publish on 0.0.0.0.
+    ports:
+      - "127.0.0.1:8000:8000"
+#ENDIF
+
+    # Container Apps and most orchestrators set restart policy at the
+    # platform layer. In compose we pick a sensible dev default.
+    restart: unless-stopped
+
+    # Resource limits. Prevents a misbehaving workload from starving the
+    # host during development. Tune for your workload.
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
+
+    # Liveness is defined in the Dockerfile itself so the production
+    # orchestrator uses the same check. compose inherits it automatically.
+
+# No named volumes, no shared networks, no database/redis/etc. If you add
+# stateful services for local development, define them here with their own
+# hardening (read_only where possible, no_new_privileges, capability drops).
