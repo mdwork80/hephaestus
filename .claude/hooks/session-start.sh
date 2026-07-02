@@ -15,6 +15,15 @@ echo "substance intact. Off only on 'stop caveman' / 'normal mode'."
 echo ""
 
 # --- 2. Hephaestus drift scan -----------------------------------------------
+# Base-template guard: a fresh clone and the base repo are byte-identical, so
+# the only cheap distinguisher is the directory name — clones get project-named
+# dirs. A clone into a dir literally named "hephaestus" suppresses the notice;
+# documented trade-off, rename the dir or run /hephaestus manually.
+if [ "$(basename "$ROOT")" = "hephaestus" ]; then
+  [ ! -f "$ROOT/PROJECT.md" ] && echo "Hephaestus base template repo (no PROJECT.md by design) — bootstrap notice suppressed; fires only in project-named clones."
+  exit 0
+fi
+
 if [ ! -f "$ROOT/PROJECT.md" ]; then
   echo "HEPHAESTUS BOOTSTRAP REQUIRED: no PROJECT.md — this is a fresh clone"
   echo "of the hephaestus base. On the first substantive task, run the"
