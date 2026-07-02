@@ -48,10 +48,28 @@ if [ "$(basename "$ROOT")" = "hephaestus" ]; then
 fi
 
 if [ ! -f "$ROOT/PROJECT.md" ]; then
-  echo "HEPHAESTUS BOOTSTRAP REQUIRED: no PROJECT.md — this is a fresh clone"
-  echo "of the hephaestus base. On the first substantive task, run the"
-  echo "hephaestus skill in bootstrap mode (infer answers from the task, no"
-  echo "questions) BEFORE doing the task."
+  # No PROJECT.md: bootstrap (empty clone) vs adopt (real code already here).
+  # Source census excludes the hephaestus kit itself and vendored/build dirs.
+  code_found="$(find "$ROOT" \
+    \( -name .git -o -name node_modules -o -name target -o -name .venv -o -name dist -o -name vendor \
+       -o -path "$ROOT/.claude" -o -path "$ROOT/tools/mcp" -o -path "$ROOT/tools/project-forge" \) -prune -o \
+    -type f \( -name '*.py' -o -name '*.rs' -o -name '*.go' -o -name '*.ts' -o -name '*.js' \
+       -o -name '*.cs' -o -name '*.rb' -o -name '*.java' -o -name '*.ps1' \
+       -o -name 'pyproject.toml' -o -name 'setup.py' -o -name 'requirements.txt' \
+       -o -name 'Cargo.toml' -o -name 'package.json' -o -name 'go.mod' \) \
+    -print -quit 2>/dev/null)"
+  if [ -n "$code_found" ]; then
+    echo "HEPHAESTUS ADOPT REQUIRED: source code present but no PROJECT.md —"
+    echo "this is an external project being ingested. Run the hephaestus skill"
+    echo "in adopt mode (references/adopt.md: kit transplant, evidence survey,"
+    echo "security triage, gap analysis) on branch hephaestus/adopt BEFORE any"
+    echo "other work."
+  else
+    echo "HEPHAESTUS BOOTSTRAP REQUIRED: no PROJECT.md — this is a fresh clone"
+    echo "of the hephaestus base. On the first substantive task, run the"
+    echo "hephaestus skill in bootstrap mode (infer answers from the task, no"
+    echo "questions) BEFORE doing the task."
+  fi
   exit 0
 fi
 

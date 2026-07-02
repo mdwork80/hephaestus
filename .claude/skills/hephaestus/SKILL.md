@@ -1,6 +1,6 @@
 ---
 name: hephaestus
-description: Zero-question project scaffolder with security-by-default governance — validated PROJECT.md frontmatter, secrets hygiene, pre-commit gates, hardened containers, CI — in ANY programming or scripting language. Infers all answers from the task; never interviews. Bootstrap mode scaffolds a fresh clone; augment mode adds toolchain + safeguards when a new language or runtime pattern enters the project. Trigger. fresh clone with no PROJECT.md, "new project", "scaffold", "hephaestus", "/hephaestus", or a task introducing a language/runtime not declared in PROJECT.md.
+description: Zero-question project scaffolder with security-by-default governance — validated PROJECT.md frontmatter, secrets hygiene, pre-commit gates, hardened containers, CI — in ANY programming or scripting language. Infers all answers from the task; never interviews. Bootstrap mode scaffolds a fresh clone; augment mode adds toolchain + safeguards when a new language or runtime pattern enters the project; adopt mode ingests an existing ungoverned codebase. Trigger. fresh clone with no PROJECT.md, "new project", "scaffold", "hephaestus", "/hephaestus", a task introducing a language/runtime not declared in PROJECT.md, or "adopt"/"ingest"/"onboard this existing project".
 ---
 
 # Hephaestus (skill)
@@ -15,8 +15,9 @@ Reference docs (read before emitting anything):
 
 ## Mode selection
 
-- **Bootstrap** — no `PROJECT.md` at repo root (fresh clone of the hephaestus base, or empty target dir). Full scaffold.
+- **Bootstrap** — no `PROJECT.md` at repo root AND no pre-existing source code (fresh clone of the hephaestus base, or empty target dir). Full scaffold.
 - **Augment** — `PROJECT.md` exists and the current task introduces a language, runtime pattern, or deployment change not declared in its frontmatter (e.g. Python CLI grows a Rust+axum API and a TypeScript front end). Emit only the delta, then continue with the task. The session-start drift scan (`.claude/hooks/session-start.sh`) also flags undeclared languages — treat its warning as a mandatory augment trigger before feature work.
+- **Adopt** — no `PROJECT.md` but real source code exists (an external project being ingested). Full workflow in `references/adopt.md`: kit transplant → evidence survey → security triage (full-history secrets scan first) → gap analysis → invariant-justified restructure with reference rewriting → middleware suggestion diffs → ARCHITECTURE.md reconstruction → report. Runs on a `hephaestus/adopt` branch with per-phase checkpoints; never rewrites business logic.
 
 ## Bootstrap workflow
 
