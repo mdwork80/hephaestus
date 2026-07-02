@@ -15,18 +15,22 @@ Later, when a task introduces a new language or runtime ("add a Rust API and a T
 
 Already have a project with no scaffolding? **Adopt mode** ingests it — see [Adopting an existing project](#adopting-an-existing-project).
 
+Every scaffolded project records the kit version and base-template URL in its `PROJECT.md` frontmatter (`hephaestus_version` / `hephaestus_base`). When the base template improves, say **"sync hephaestus"** in any child project — **sync mode** fetches the base, re-layers only the kit paths (skills, hooks, forge-ref, `.mcp.json`), leaves your project files untouched, and reports the diff.
+
 ## Repository layout
 
 | Path | Purpose |
 |---|---|
-| `CLAUDE.md` | Standing rules the assistant loads every session: bootstrap on fresh clone, adopt on existing code, augment on new language, governance non-negotiables |
+| `CLAUDE.md` | Standing rules the assistant loads every session: bootstrap on fresh clone, adopt on existing code, augment on new language, sync for kit updates, current-docs-first (context7), governance non-negotiables |
+| `AGENTS.md`, `GEMINI.md`, `.github/copilot-instructions.md`, `.cursor/rules/hephaestus.mdc` | The same rules for non-Claude assistants — GENERATED from `CLAUDE.md`, drift-checked by the selftest; edit `CLAUDE.md`, never these |
 | `.claude/skills/hephaestus/` | The scaffolder: workflow (`SKILL.md`) + governance schema, file matrix, and security invariants (`references/`) |
 | `.claude/skills/context7/` | Current-documentation lookup for any library/framework/API — standing rule: consult before coding against external APIs |
-| `.claude/skills/caveman*`, `cavecrew/` | Optional token-compression communication suite (opt out: `.claude/caveman.off`) |
+| `.claude/skills/caveman*`, `cavecrew/` | Optional token-compression communication suite (opt out: `touch .claude/caveman.off` or `HEPHAESTUS_CAVEMAN=off`) |
 | `.claude/hooks/session-start.sh` / `.ps1` | Session hook (bash + PowerShell ports, identical output): activates compressed mode, runs the forge-ref selftest, dispatches bootstrap/adopt/augment notices, warns on missing MCP runtimes |
 | `.mcp.json` | MCP server registry (see below) |
-| `tools/mcp/forge-ref/` | Zero-dependency python3 MCP server serving canonical deep templates + frontmatter validation |
-| `tools/project-forge/` | Legacy Copier template (gitignored reference source; not used for generation) |
+| `tools/mcp/forge-ref/` | Zero-dependency python3 MCP server: canonical deep templates, frontmatter validation, machine-readable schema, secrets scanning. Kit version lives at `tools/mcp/forge-ref/VERSION` |
+| `docs/ARCHITECTURE.md` | Cross-cutting design decisions for this repo, enforced by the selftest's logic-ref integrity check |
+| `skills-lock.json` | Provenance record (source repo + hash) for installed third-party skills — not an update mechanism once local edits diverge |
 
 ## MCP servers
 
@@ -67,7 +71,7 @@ For codebases that already exist but have no scaffolding or security posture. Ad
 ```bash
 git clone <this-repo> my-project-adopted   # fresh clone, NOT named "hephaestus"
 cd my-project-adopted
-claude   # or your AI of choice, after the conversion in the next section
+claude   # or your AI of choice — its instruction file ships pre-built (see below)
 # say: "adopt /path/to/my-existing-project"
 ```
 
@@ -104,15 +108,15 @@ Concept map:
 | `.mcp.json` | `~/.codex/config.toml` `[mcp_servers.*]` | `.gemini/settings.json` `mcpServers` | `.vscode/mcp.json` `servers` | `.cursor/mcp.json` `mcpServers` |
 | `.claude/hooks/` | — (run manually) | — (run manually) | — (run manually) | — (run manually) |
 
-Ask your assistant to do the conversion for you — this prompt works on any of them:
+Using a tool not covered by the pre-built files? This conversion prompt works on any assistant:
 
-> Read CLAUDE.md, .claude/skills/hephaestus/SKILL.md, and .claude/skills/hephaestus/references/*.md. Merge their rules into this tool's instruction file (see the concept map in README.md), preserving verbatim: the bootstrap and augment rules, the 11 cross-field governance rules, and the "never interview, infer + report after" behavior. Then translate .mcp.json into this tool's MCP configuration format. Do not modify the .claude/ directory — leave it intact for Claude users.
+> Read CLAUDE.md, .claude/skills/hephaestus/SKILL.md, and .claude/skills/hephaestus/references/*.md. Merge their rules into this tool's instruction file (see the concept map in README.md), preserving verbatim: the bootstrap/adopt/augment/sync rules, the 11 cross-field governance rules, and the "never interview, infer + report after" behavior. Then translate .mcp.json into this tool's MCP configuration format. Do not modify the .claude/ directory — leave it intact for Claude users.
 
-Per-tool notes:
+Per-tool notes (instruction files already exist; only MCP config is manual):
 
 ### OpenAI Codex CLI
 
-- Create `AGENTS.md` at repo root containing the CLAUDE.md rules plus a condensed hephaestus workflow (Codex reads `AGENTS.md` automatically).
+- `AGENTS.md` ships pre-built at repo root (Codex reads it automatically).
 - MCP goes in `~/.codex/config.toml` (global, per-machine — Codex has no project-scope MCP file):
 
 ```toml
@@ -129,7 +133,7 @@ args = ["dnx", "-y", "Azure.Bicep.McpServer"]
 
 ### Gemini CLI
 
-- Create `GEMINI.md` at repo root (same content strategy as `AGENTS.md`).
+- `GEMINI.md` ships pre-built at repo root.
 - MCP goes in `.gemini/settings.json` (project-scope, shareable — closest match to `.mcp.json`):
 
 ```json
@@ -145,7 +149,7 @@ args = ["dnx", "-y", "Azure.Bicep.McpServer"]
 
 ### GitHub Copilot (VS Code)
 
-- Create `.github/copilot-instructions.md` with the CLAUDE.md rules; put the hephaestus workflow in `.github/prompts/hephaestus.prompt.md` so `/hephaestus` works in Copilot Chat.
+- `.github/copilot-instructions.md` ships pre-built. Optional: add `.github/prompts/hephaestus.prompt.md` with the SKILL.md workflow so `/hephaestus` works in Copilot Chat.
 - MCP goes in `.vscode/mcp.json` — note the key is `servers` and each entry takes `"type": "stdio"`:
 
 ```json
@@ -158,7 +162,7 @@ args = ["dnx", "-y", "Azure.Bicep.McpServer"]
 
 ### Cursor
 
-- Create `.cursor/rules/hephaestus.mdc` with `alwaysApply: true` frontmatter carrying the CLAUDE.md rules + workflow.
+- `.cursor/rules/hephaestus.mdc` ships pre-built (`alwaysApply: true`).
 - MCP goes in `.cursor/mcp.json`, same `mcpServers` shape as `.mcp.json` — often a straight copy.
 
 ### What does not port
@@ -169,6 +173,18 @@ args = ["dnx", "-y", "Azure.Bicep.McpServer"]
 
 Whatever the tool, keep `.claude/` intact and additive — the same clone should work for Claude and non-Claude users side by side.
 
+## Template development
+
+Working on the base template itself (not a child project):
+
+```bash
+python3 tools/mcp/forge-ref/server.py --selftest            # fixtures, renders, logic-refs, derived-file drift
+python3 tools/mcp/forge-ref/server.py --scan-secrets .      # zero-dep working-tree secrets scan
+python3 tools/mcp/forge-ref/server.py --emit-instructions   # regenerate AGENTS.md/GEMINI.md/copilot/cursor after editing CLAUDE.md
+```
+
+Two lockstep rules the selftest enforces: any governance-schema change updates `references/schema.md` + the validator + the fixtures in the same commit, and any `CLAUDE.md` edit regenerates the derived instruction files. CI (`.github/workflows/ci.yml`) runs the same gates plus shellcheck, hook dispatch smoke tests, and gitleaks over full history.
+
 ## License
 
-See [LICENSE](LICENSE) if present; otherwise treat as proprietary to the template owner.
+[GPLv3](LICENSE). Projects scaffolded *by* the template choose their own license (`license` frontmatter field); the template itself and its kit are GPLv3.
