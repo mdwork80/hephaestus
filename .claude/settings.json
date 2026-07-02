@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Edit(/.claude/skills/**)"
+      "Edit(/.claude/skills/**)",
+      "Edit(/.claude/skills/hephaestus/**)"
     ],
     "additionalDirectories": []
   },

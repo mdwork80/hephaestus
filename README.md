@@ -13,11 +13,13 @@ Built for [Claude Code](https://claude.com/claude-code), portable to other AI co
 
 Later, when a task introduces a new language or runtime ("add a Rust API and a TypeScript front end"), **augment mode** adds the new toolchain blocks (lint, SAST, dependency audit, CI jobs, pre-commit hooks) and updates the frontmatter before building the feature.
 
+Already have a project with no scaffolding? **Adopt mode** ingests it — see [Adopting an existing project](#adopting-an-existing-project).
+
 ## Repository layout
 
 | Path | Purpose |
 |---|---|
-| `CLAUDE.md` | Standing rules the assistant loads every session: bootstrap on fresh clone, augment on new language, governance non-negotiables |
+| `CLAUDE.md` | Standing rules the assistant loads every session: bootstrap on fresh clone, adopt on existing code, augment on new language, governance non-negotiables |
 | `.claude/skills/hephaestus/` | The scaffolder: workflow (`SKILL.md`) + governance schema, file matrix, and security invariants (`references/`) |
 | `.claude/skills/caveman*`, `cavecrew/` | Optional token-compression communication suite |
 | `.claude/hooks/session-start.sh` | Session hook: activates compressed mode, scans for scaffold drift (undeclared languages), warns on missing MCP runtimes |
@@ -48,6 +50,31 @@ claude
 ```
 
 The scaffolder detaches `origin` during bootstrap so you never push a child project back to this template.
+
+## Adopting an existing project
+
+For codebases that already exist but have no scaffolding or security posture. Adoption copies the external project INTO a fresh hephaestus clone — **your original folder is never touched**. If anything about the conversion goes wrong, delete the clone; the original is exactly as it was.
+
+```bash
+git clone <this-repo> my-project-adopted   # fresh clone, NOT named "hephaestus"
+cd my-project-adopted
+claude   # or your AI of choice, after the conversion in the next section
+# say: "adopt /path/to/my-existing-project"
+```
+
+The full workflow is defined in [`.claude/skills/hephaestus/references/adopt.md`](.claude/skills/hephaestus/references/adopt.md). Because the clone already carries every instruction file and MCP config, this works the same whichever AI assistant runs it — nothing ever needs to ask where hephaestus lives. Seven phases, one checkpoint commit each, on a `hephaestus/adopt` branch:
+
+1. **Ingest by copy** — the template's git history is discarded and your project's entire contents *including its `.git`* are copied in (real history is needed for the secrets scan and for history-preserving moves). The governance kit is re-layered on top. Collisions: kit files win for `.claude/`/`.mcp.json`/`tools/mcp/`; your files win for everything else — and if your project has its own AI instruction file (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, copilot-instructions, Cursor rules), the hephaestus standing rules are merged into *your* file and yours wins.
+2. **Evidence survey** — infers the full `PROJECT.md` frontmatter from what's actually there: manifests and source census → languages, frameworks and entrypoints → runtime patterns, Dockerfiles/cloud SDKs → deployment target, git history age → lifecycle stage. No questions.
+3. **Security triage** — *before anything moves*: full-history secrets scan (gitleaks + detect-secrets), rotation guidance for anything found (a secret that ever touched git is burned), hardcoded-config inventory, posture flags (wildcard CORS, missing auth, disabled TLS verification).
+4. **Gap analysis** — every required artifact is generated (missing), diffed against the canonical forge-ref version (present but weak — applied only when safe-additive), or kept as-is (adequate, even if unconventional). Plus lockfile generation and a dependency vulnerability audit.
+5. **Restructure** — only when the existing layout blocks a documented invariant, never for cosmetics. Moves use `git mv`, every reference is rewritten (imports, manifests, CI paths, Dockerfile COPYs, doc links), and each batch is gated on tests passing before *and* after. No tests → smoke tests get written first, or the move is demoted to a suggestion.
+6. **Middleware suggestions** — web/API code is diffed against the security-middleware invariants (request IDs, security headers, size limits, health/ready split, sanitized errors, pinned CORS). Gaps come back as ready-to-apply diffs for your review; only zero-behavior-change hardening is applied directly.
+7. **ARCHITECTURE.md reconstruction** — the decisions your code already embodies (framework, storage, auth, data flow) get recorded as proper decision entries, plus an `[adopted-into-hephaestus]` entry documenting the source path, what changed, and what was deferred.
+
+You end with a single report: security findings (rotation actions first), the frontmatter decisions table with evidence, what was generated/upgraded/kept, moves applied vs. demoted, suggestion diffs, and manual follow-ups. Two warnings always included: the adopted repo's `origin` still points at your original project's remote (re-point before pushing), and any uncommitted changes in the original were captured in the snapshot.
+
+Rerunning adopt on a half-adopted clone is safe — phases detect completed work and continue. Full rollback at any point: delete the clone.
 
 ## Using with other AI assistants
 

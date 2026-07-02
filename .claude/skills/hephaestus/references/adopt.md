@@ -2,23 +2,41 @@
 
 Third mode alongside bootstrap (empty clone) and augment (declared project grows). Adopt takes a real codebase with no scaffolding or security posture and brings it under hephaestus governance without breaking it. Zero questions, same as everywhere: infer from evidence, act where safe, propose where not, report everything.
 
+Direction of ingestion: the external project is copied INTO a fresh hephaestus clone. The original folder is never touched — the user's rollback is "delete the clone, original intact." This also keeps the flow AI-agnostic: whoever runs the adoption starts inside the clone (which carries every instruction file) and points outward at a plain folder path; no assistant ever needs to locate hephaestus.
+
 Non-negotiable rails, before any phase:
 
-- Work on a dedicated branch: `hephaestus/adopt`. One commit checkpoint per phase, so any phase can be reverted alone.
+- The external project folder is READ-ONLY throughout. All work happens in the clone.
+- After ingestion, adoption work runs on a `hephaestus/adopt` branch of the copied history, one checkpoint commit per phase, so any phase can also be reverted alone.
 - Never delete or rewrite user source logic. Adopt adds, moves, and configures; it does not refactor business code.
 - Every phase is idempotent — re-running adopt on a half-adopted repo detects what's done and continues.
 - Existing user code is respected as the source of truth about what the project IS; hephaestus artifacts adapt to it, not vice versa.
 
-## Phase 0 — Kit transplant
+## Phase 0 — Ingest by copy
 
-External projects have none of the hephaestus machinery. Copy from the base template into the target repo root:
+Run from a fresh hephaestus clone (project-named directory). The user supplies the external project path ("adopt /path/to/project").
 
-- `.claude/` (skills, hooks, settings.json — NOT settings.local.json)
-- `.mcp.json`
-- `tools/mcp/forge-ref/` (server + templates + fixtures)
-- `CLAUDE.md` (then adapt: layout section reflects the adopted repo, not the template)
+1. **Snapshot the kit.** Stash the clone's kit files aside (in-memory or temp): `.claude/`, `.mcp.json`, `tools/mcp/forge-ref/`, `CLAUDE.md`, `docs/ARCHITECTURE.md` template knowledge.
+2. **Replace history.** Delete the clone's template `.git` — template history is noise in a child project. Copy the ENTIRE external project contents into the clone, **including its `.git`**: the full-history secrets scan (Phase 2) and `git mv` reference preservation (Phase 4) depend on real history. External project has no `.git` → copy the tree, `git init -b main`, commit a `pre-adoption snapshot` so there is a clean revert point.
+3. **Re-layer the kit** on top per the collision policy below, as the first checkpoint commit on a new `hephaestus/adopt` branch.
+4. **Verify**: `python3 tools/mcp/forge-ref/server.py --selftest` passes in the clone.
 
-Do NOT copy: `tools/project-forge/`, `README.md`, `docs/ARCHITECTURE.md` (Phase 6 writes the adopted repo's own), any git history. Verify `python3 tools/mcp/forge-ref/server.py --selftest` passes in the target before continuing.
+Collision policy (external file exists where hephaestus has one):
+
+| Path | Winner |
+|---|---|
+| `.claude/`, `.mcp.json`, `tools/mcp/` | hephaestus (kit) |
+| Source code, project docs, `README.md` | external — the template README dies |
+| `.gitignore` | union merge (external entries + kit entries, deduped) |
+| `docs/ARCHITECTURE.md` | external kept if present; Phase 6 appends, never replaces |
+| Instruction files — see below | external wins, AFTER the merge below |
+
+**Instruction-file merge.** If the external project carries its own AI instruction file(s) — `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.github/copilot-instructions.md`, `.cursor/rules/*.mdc` — do NOT overwrite them. Instead, copy the **Standing rules** and **Layout** sections from the hephaestus `CLAUDE.md` into each external instruction file (append as clearly-headed sections, paths adapted to the adopted repo), and then the external file wins — the merged external file IS the instruction file going forward. Only when the external project has no instruction file at all does the hephaestus `CLAUDE.md` stand as-is (adapted: layout section describes the adopted repo, not the template).
+
+Two facts to carry into the Phase 7 report:
+
+- **Remote:** the copied `.git` still points `origin` at the external project's remote. Adopt never pushes; the report must remind the user that pushing from the adopted repo goes to the ORIGINAL project's remote unless re-pointed.
+- **Uncommitted state:** dirty working-tree changes in the original are copied as-is and noted — adopt does not refuse, but the user should know the snapshot includes uncommitted work.
 
 ## Phase 1 — Survey (evidence → frontmatter)
 
@@ -29,7 +47,7 @@ Infer every schema.md field from the repo itself. Evidence map:
 | `project_name` / `description` | README, manifest metadata, repo/dir name |
 | `languages` | manifests (pyproject/setup.py/requirements.txt, Cargo.toml, package.json, go.mod, *.csproj, *.psd1), source-file census; order by volume — dominant language first |
 | `runtime_patterns` | entrypoints + frameworks: FastAPI/Flask/axum/express → web_app or api_service (HTML templates → web_app, JSON-only → api_service); argparse/clap/cobra → cli; queue consumers → background_worker; cron/scheduled triggers → scheduled_job; no entrypoint + exported API → library |
-| `deployment_target` | Dockerfile/compose → containerized; Azure SDKs/Bicep/azure-pipelines → azure; AWS SDKs/CDK/terraform-aws → note (schema is azure-centric; use multi_cloud) ; none → local_only |
+| `deployment_target` | Dockerfile/compose → containerized; Azure SDKs/Bicep/azure-pipelines → azure; AWS SDKs/CDK/terraform-aws → note (schema is azure-centric; use multi_cloud); none → local_only |
 | `lifecycle_stage` | git history: active multi-year repo with releases → production or maintenance (recent feature velocity decides); young/sparse → prototype. NEVER default a mature repo to prototype — it weakens governance |
 | `auth_model` | existing auth middleware/decorators/API-key checks; none on a networked pattern → `none` now, but Rule 8 will force a decision — record as auto-resolution |
 | `data_classification` / `data_types` | schema fields, PII-shaped models (names, emails, SSNs), payment/health vocabulary in code; when evidence is thin default `internal` + `[none]` and say so |
@@ -74,13 +92,13 @@ For web_app/api_service code, diff the live app against invariants §Web service
 
 ## Phase 6 — ARCHITECTURE.md reconstruction
 
-Write `docs/ARCHITECTURE.md` (layer-2) for the adopted repo:
+Write or extend `docs/ARCHITECTURE.md` (layer-2) for the adopted repo:
 
 - Reverse-engineer the cross-cutting decisions the code already embodies — framework choice, storage layer, auth approach, queue/data flow, deployment shape — one ACTIVE `[decision-id]` entry each, rationale phrased as "observed + why it appears deliberate"; mark genuinely unclear rationale as such rather than inventing it.
-- Add an `[adopted-into-hephaestus]` entry: date, frontmatter decided, what adopt changed, what it deferred.
+- Add an `[adopted-into-hephaestus]` entry: date, source path of the original project, frontmatter decided, what adopt changed, what it deferred.
 - Seed the protocol forward-only: new/touched code gets `@logic-ref` docstrings; do NOT retro-tag the whole codebase.
 - Wire the generated logic-ref checker into pre-commit + CI like any scaffold.
 
 ## Phase 7 — Report
 
-Single message, in order: security findings (rotation actions first), frontmatter decisions table (field → value → evidence), artifacts generated / upgraded / kept, moves applied vs demoted (with reasons), middleware suggestion diffs, ARCHITECTURE.md entries written, manual follow-ups (tools not installed, rotations pending, history purge decision). End with the branch name and the per-phase checkpoint commits so partial rollback is one revert away.
+Single message, in order: security findings (rotation actions first), frontmatter decisions table (field → value → evidence), artifacts generated / upgraded / kept, moves applied vs demoted (with reasons), middleware suggestion diffs, ARCHITECTURE.md entries written, instruction-file merges performed, manual follow-ups (tools not installed, rotations pending, history purge decision). Always include: the `origin` remote warning (pushes go to the original project's remote until re-pointed), whether uncommitted changes from the original were captured, and the reminder that the original folder is untouched — full rollback is deleting this clone. End with the branch name and the per-phase checkpoint commits so partial rollback is one revert away.

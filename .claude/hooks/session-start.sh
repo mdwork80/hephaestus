@@ -60,10 +60,10 @@ if [ ! -f "$ROOT/PROJECT.md" ]; then
     -print -quit 2>/dev/null)"
   if [ -n "$code_found" ]; then
     echo "HEPHAESTUS ADOPT REQUIRED: source code present but no PROJECT.md —"
-    echo "this is an external project being ingested. Run the hephaestus skill"
-    echo "in adopt mode (references/adopt.md: kit transplant, evidence survey,"
-    echo "security triage, gap analysis) on branch hephaestus/adopt BEFORE any"
-    echo "other work."
+    echo "an adoption is in progress (external project copied in, governance"
+    echo "not yet emitted). Resume the hephaestus skill in adopt mode"
+    echo "(references/adopt.md; phases are idempotent) on branch"
+    echo "hephaestus/adopt BEFORE any other work."
   else
     echo "HEPHAESTUS BOOTSTRAP REQUIRED: no PROJECT.md — this is a fresh clone"
     echo "of the hephaestus base. On the first substantive task, run the"
