@@ -14,11 +14,14 @@ $ErrorActionPreference = 'SilentlyContinue'
 $root = & git rev-parse --show-toplevel 2>$null
 if (-not $root) { $root = (Get-Location).Path }
 
-# --- 1. Caveman activation ----------------------------------------------------
-Write-Output "CAVEMAN MODE ACTIVE (level: full). Obey .claude/skills/caveman/SKILL.md"
-Write-Output "from the FIRST response onward: terse, no filler, all technical"
-Write-Output "substance intact. Off only on 'stop caveman' / 'normal mode'."
-Write-Output ""
+# --- 1. Caveman activation (opt-out) --------------------------------------------
+# Disable with `New-Item .claude/caveman.off` or $env:HEPHAESTUS_CAVEMAN = 'off'.
+if (($env:HEPHAESTUS_CAVEMAN -ne 'off') -and -not (Test-Path (Join-Path $root '.claude/caveman.off'))) {
+    Write-Output "CAVEMAN MODE ACTIVE (level: full). Obey .claude/skills/caveman/SKILL.md"
+    Write-Output "from the FIRST response onward: terse, no filler, all technical"
+    Write-Output "substance intact. Off only on 'stop caveman' / 'normal mode'."
+    Write-Output ""
+}
 
 # --- 1b. MCP runtime prerequisites ---------------------------------------------
 $missing = @()

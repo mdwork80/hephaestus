@@ -8,11 +8,14 @@ set -u
 
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 
-# --- 1. Caveman activation --------------------------------------------------
-echo "CAVEMAN MODE ACTIVE (level: full). Obey .claude/skills/caveman/SKILL.md"
-echo "from the FIRST response onward: terse, no filler, all technical"
-echo "substance intact. Off only on 'stop caveman' / 'normal mode'."
-echo ""
+# --- 1. Caveman activation (opt-out) ------------------------------------------
+# Disable with `touch .claude/caveman.off` or HEPHAESTUS_CAVEMAN=off.
+if [ "${HEPHAESTUS_CAVEMAN:-on}" != "off" ] && [ ! -f "$ROOT/.claude/caveman.off" ]; then
+  echo "CAVEMAN MODE ACTIVE (level: full). Obey .claude/skills/caveman/SKILL.md"
+  echo "from the FIRST response onward: terse, no filler, all technical"
+  echo "substance intact. Off only on 'stop caveman' / 'normal mode'."
+  echo ""
+fi
 
 # --- 1b. MCP runtime prerequisites -------------------------------------------
 # .mcp.json servers need these on each machine; warn, never block.
