@@ -86,7 +86,9 @@ Rerunning adopt on a half-adopted clone is safe — phases detect completed work
 
 ## Using with other AI assistants
 
-Everything load-bearing is markdown, JSON, and a bash script — nothing is Claude-proprietary except the file *locations*. To port, you translate three things:
+**Instruction files for Codex/ChatGPT (`AGENTS.md`), Gemini (`GEMINI.md`), Copilot (`.github/copilot-instructions.md`), and Cursor (`.cursor/rules/hephaestus.mdc`) ship pre-built** — generated from `CLAUDE.md` and drift-checked by the forge-ref selftest. Your tool picks its file up automatically; usually the only manual step left is translating the MCP config below. (After editing `CLAUDE.md`, regenerate with `python3 tools/mcp/forge-ref/server.py --emit-instructions`.)
+
+Everything load-bearing is markdown, JSON, and a bash script — nothing is Claude-proprietary except the file *locations*. The pieces, if you need to port by hand:
 
 1. **Instructions** — `CLAUDE.md` + `.claude/skills/hephaestus/SKILL.md` + its `references/*.md` become your tool's instruction file(s).
 2. **MCP servers** — `.mcp.json` becomes your tool's MCP config (same servers, same commands, different key names).

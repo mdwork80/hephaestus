@@ -520,6 +520,66 @@ def build_schema() -> dict:
 
 
 # =============================================================================
+# Derived AI instruction files
+# =============================================================================
+
+# Repo-root-relative targets. Cursor needs .mdc frontmatter; others are plain.
+INSTRUCTION_TARGETS = {
+    "AGENTS.md": "",
+    "GEMINI.md": "",
+    ".github/copilot-instructions.md": "",
+    ".cursor/rules/hephaestus.mdc": "---\ndescription: Hephaestus clone-base template rules\nalwaysApply: true\n---\n\n",
+}
+
+_NON_CLAUDE_ADAPTATION = """
+## Non-Claude adaptation
+
+This file is for AI assistants other than Claude Code. Three mechanics differ:
+
+1. **Skills**: you cannot invoke Claude skills. Instead, READ
+   `.claude/skills/hephaestus/SKILL.md` and its `references/*.md` and follow
+   them literally — they are plain instructions, not Claude-specific code.
+2. **Session hook**: you get no automatic session hook. At the start of every
+   session run `bash .claude/hooks/session-start.sh` (or on Windows
+   `powershell -NoProfile -ExecutionPolicy Bypass -File .claude/hooks/session-start.ps1`)
+   and obey its output before any other work.
+3. **MCP servers**: translate `.mcp.json` into your tool's MCP configuration —
+   see README.md "Using with other AI assistants" for per-tool formats. If your
+   tool cannot run MCP servers, invoke forge-ref directly:
+   `python3 tools/mcp/forge-ref/server.py --selftest | --scan-secrets [path]`,
+   and read templates from `tools/mcp/forge-ref/templates/`.
+"""
+
+
+def build_instructions() -> dict[str, str]:
+    """
+    Purpose: derive the non-Claude instruction files (AGENTS.md, GEMINI.md,
+    copilot-instructions, Cursor rule) from CLAUDE.md so peers on other AI
+    tools clone and go — no conversion prompt, no drift.
+    Rationale: instructions-as-artifact beats instructions-to-convert; the
+    selftest fails when CLAUDE.md changes without regeneration, so the four
+    derivatives can never silently diverge. @logic-ref: forge-ref-derived-instructions
+    """
+    claude_md = (ROOT.parents[2] / "CLAUDE.md").read_text()
+    banner = (
+        "<!-- GENERATED from CLAUDE.md by: python3 tools/mcp/forge-ref/server.py"
+        " --emit-instructions -->\n"
+        "<!-- Do not edit by hand: edit CLAUDE.md, then re-run that command. -->\n\n"
+    )
+    body = banner + claude_md.rstrip() + "\n" + _NON_CLAUDE_ADAPTATION
+    return {path: prefix + body for path, prefix in INSTRUCTION_TARGETS.items()}
+
+
+def emit_instructions() -> int:
+    for rel, content in build_instructions().items():
+        out = ROOT.parents[2] / rel
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(content)
+        print(f"wrote {rel}")
+    return 0
+
+
+# =============================================================================
 # MCP tool definitions and dispatch
 # =============================================================================
 
@@ -723,6 +783,14 @@ def selftest() -> int:
         if any("hello" in f.get("redacted", "") for f in result["findings"]):
             failures.append("secrets scanner false-positive on plain prose")
 
+    # 2d. Derived instruction files must match CLAUDE.md.
+    for rel, content in build_instructions().items():
+        target = ROOT.parents[2] / rel
+        if not target.exists():
+            failures.append(f"derived instruction file missing: {rel} (run --emit-instructions)")
+        elif target.read_text() != content:
+            failures.append(f"derived instruction file drifted from CLAUDE.md: {rel} (run --emit-instructions)")
+
     # 3. Logic-ref integrity.
     ref_re = re.compile(r"@logic-ref:\s*([a-z0-9]+(?:-[a-z0-9]+)+)")
     source_ids: dict[str, int] = {}
@@ -762,6 +830,8 @@ def selftest() -> int:
 def main() -> None:
     if "--selftest" in sys.argv[1:]:
         sys.exit(selftest())
+    if "--emit-instructions" in sys.argv[1:]:
+        sys.exit(emit_instructions())
     if "--scan-secrets" in sys.argv[1:]:
         args = sys.argv[1:]
         idx = args.index("--scan-secrets")

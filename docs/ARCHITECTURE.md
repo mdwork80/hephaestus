@@ -76,6 +76,25 @@ repo); `[schema-validator-lockstep]` supersedes that repo's
 
 ---
 
+## [derived-instruction-files]
+- Scope: CLAUDE.md, AGENTS.md, GEMINI.md, .github/copilot-instructions.md,
+  .cursor/rules/hephaestus.mdc, tools/mcp/forge-ref/server.py
+- Decision: CLAUDE.md is the single source of truth for assistant
+  instructions. The four non-Claude files are GENERATED from it via
+  `python3 tools/mcp/forge-ref/server.py --emit-instructions` (CLAUDE.md body
+  + a non-Claude adaptation section covering skills-as-plain-docs, manual
+  session-hook invocation, and MCP config translation). The selftest fails
+  when any derivative drifts from CLAUDE.md.
+- Rationale: Peers use ChatGPT/Codex, Gemini, Copilot, and Cursor;
+  instructions-as-artifact beats a conversion prompt (nothing to run, nothing
+  to trust). Hand-maintaining four copies would drift silently — generation +
+  a drift gate makes divergence impossible. Alternative rejected: symlinks
+  (Windows unfriendliness, Cursor needs .mdc frontmatter).
+- Affected @logic-refs: forge-ref-derived-instructions
+- Status: ACTIVE
+
+---
+
 ## [template-example]
 <!-- Copy this block for new decisions. Replace the id above. -->
 - Scope: which modules or agents this governs
