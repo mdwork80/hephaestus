@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Edit(/.claude/skills/hephaestus/**)",
+      "Bash(bash .claude/hooks/session-start.sh)"
+    ],
+    "additionalDirectories": []
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/session-start.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
