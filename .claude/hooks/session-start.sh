@@ -77,7 +77,7 @@ if [ ! -f "$ROOT/PROJECT.md" ]; then
 fi
 
 # Languages declared in PROJECT.md frontmatter (block list under 'languages:').
-declared="$(awk '/^languages:/{f=1;next} f&&/^  - /{print $2;next} f{exit}' "$ROOT/PROJECT.md" | tr 'A-Z' 'a-z')"
+declared="$(awk '/^languages:/{f=1;next} f&&/^  - /{print $2;next} f{exit}' "$ROOT/PROJECT.md" | tr '[:upper:]' '[:lower:]')"
 
 # Languages detected from manifests / sources on disk (skip vendored + VCS dirs).
 detected=""

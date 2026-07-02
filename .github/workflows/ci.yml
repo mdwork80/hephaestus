@@ -1,0 +1,91 @@
+name: CI
+
+# The base template practices its own invariants: SHA-pinned actions,
+# deterministic offline selftest, secret scanning, hook linting.
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gates:
+    name: Template gates
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411  # v2.19.4
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0  # v6.0.3
+
+      - name: forge-ref selftest (fixtures, renders, logic-refs, derived instructions)
+        run: python3 tools/mcp/forge-ref/server.py --selftest
+
+      - name: Zero-dep secrets scan (working tree)
+        run: python3 tools/mcp/forge-ref/server.py --scan-secrets .
+
+      - name: Shellcheck session hook
+        run: shellcheck --severity=warning .claude/hooks/session-start.sh
+
+      - name: PowerShell hook syntax check
+        run: |
+          pwsh -NoProfile -Command '
+            $t = $null; $e = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(".claude/hooks/session-start.ps1", [ref]$t, [ref]$e) | Out-Null
+            if ($e.Count -gt 0) { $e | ForEach-Object { Write-Error $_.Message }; exit 1 }
+            Write-Output "ps1 parses clean"'
+
+      - name: JSON validity (.mcp.json, settings, manifest, fixtures)
+        run: |
+          for f in .mcp.json .claude/settings.json tools/mcp/forge-ref/templates/manifest.json tools/mcp/forge-ref/fixtures/invalid-expected.json; do
+            python3 -m json.tool "$f" > /dev/null || { echo "invalid JSON: $f" >&2; exit 1; }
+            echo "OK: $f"
+          done
+
+      - name: Hook dispatch smoke test (bootstrap vs adopt vs augment)
+        run: |
+          set -e
+          # empty clone → bootstrap
+          mkdir -p /tmp/hx/empty && cd /tmp/hx/empty
+          bash "$GITHUB_WORKSPACE/.claude/hooks/session-start.sh" | grep -q "BOOTSTRAP REQUIRED"
+          # code, no PROJECT.md → adopt
+          mkdir -p /tmp/hx/ext && cd /tmp/hx/ext && touch main.py
+          bash "$GITHUB_WORKSPACE/.claude/hooks/session-start.sh" | grep -q "ADOPT REQUIRED"
+          # undeclared language → augment
+          mkdir -p /tmp/hx/drift && cd /tmp/hx/drift
+          printf -- '---\nlanguages:\n  - python\n---\n' > PROJECT.md && touch Cargo.toml
+          bash "$GITHUB_WORKSPACE/.claude/hooks/session-start.sh" | grep -q "AUGMENT REQUIRED: language(s) present but undeclared"
+          echo "all three dispatch paths OK"
+
+  secrets:
+    name: Secret scanning (history)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411  # v2.19.4
+        with:
+          egress-policy: audit
+
+      - name: Checkout (full history)
+        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0  # v6.0.3
+        with:
+          fetch-depth: 0
+
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e  # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
