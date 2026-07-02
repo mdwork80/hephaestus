@@ -21,7 +21,8 @@ Already have a project with no scaffolding? **Adopt mode** ingests it — see [A
 |---|---|
 | `CLAUDE.md` | Standing rules the assistant loads every session: bootstrap on fresh clone, adopt on existing code, augment on new language, governance non-negotiables |
 | `.claude/skills/hephaestus/` | The scaffolder: workflow (`SKILL.md`) + governance schema, file matrix, and security invariants (`references/`) |
-| `.claude/skills/caveman*`, `cavecrew/` | Optional token-compression communication suite |
+| `.claude/skills/context7/` | Current-documentation lookup for any library/framework/API — standing rule: consult before coding against external APIs |
+| `.claude/skills/caveman*`, `cavecrew/` | Optional token-compression communication suite (opt out: `.claude/caveman.off`) |
 | `.claude/hooks/session-start.sh` / `.ps1` | Session hook (bash + PowerShell ports, identical output): activates compressed mode, runs the forge-ref selftest, dispatches bootstrap/adopt/augment notices, warns on missing MCP runtimes |
 | `.mcp.json` | MCP server registry (see below) |
 | `tools/mcp/forge-ref/` | Zero-dependency python3 MCP server serving canonical deep templates + frontmatter validation |

@@ -18,15 +18,16 @@ This repository is the base template for all new projects: it gets `git clone`d,
 4. **Hook warnings are mandatory triggers.** `.claude/hooks/session-start.sh` injects `HEPHAESTUS BOOTSTRAP REQUIRED` / `HEPHAESTUS ADOPT REQUIRED` / `HEPHAESTUS AUGMENT REQUIRED` notices at session start. Act on them before any other work; do not defer or ask.
 5. **Clone detachment.** If `git remote get-url origin` points at the hephaestus base template, this is a child project: remove or re-point the remote during bootstrap. Never push a child project to the template remote.
 6. **Governance is not negotiable.** Cross-field rules in `references/schema.md` auto-resolve toward the safer value; changing a rule is a deliberate edit to that file in its own commit, never an inline relaxation.
+7. **Current docs before code.** When writing or reviewing code against any external library, framework, or API, consult the `context7` skill (`.claude/skills/context7/`) FIRST for current documentation — training-data memory of an API is not a source. Applies to scaffold generation (framework middleware, SDK wiring) and feature work alike; if context7 is unreachable, say so and flag version assumptions in the report.
 
 ## Layout
 
 - `.claude/skills/hephaestus/` — the scaffolder (SKILL.md + schema/file-matrix/invariants references)
+- `.claude/skills/context7/` — current-documentation lookup for any library/framework/API (standing rule 7); other agents read the same SKILL.md path
 - `.claude/skills/caveman*`, `cavecrew/` — communication compression suite
 - `.claude/hooks/session-start.sh` (+ `.ps1` PowerShell port, identical output) — caveman activation + scaffold drift scan; Windows machines without bash point settings.json at the .ps1
 - `tools/mcp/forge-ref/` — MCP server (zero-dep python3, registered in `.mcp.json`) serving canonical deep templates (Docker, CI/CD, FastAPI/axum middleware) + `validate_frontmatter`; hephaestus consults it before free-generating those artifacts.
 - `.mcp.json` also registers IaC servers (user approval required, per-machine runtimes): `bicep` (Azure.Bicep.McpServer, dotnet dnx / .NET 10) for all Bicep authoring + compile checks, `terraform` (hashicorp image, docker), `aws-iac` (awslabs, uvx) for CDK + CDK-Nag. Missing runtimes → session-start hook warns; fall back to prose per invariants.md.
-- `tools/project-forge/` — legacy Copier template (reference source; do not use for generation); `.gitignore`d
 
 ## Non-Claude adaptation
 
