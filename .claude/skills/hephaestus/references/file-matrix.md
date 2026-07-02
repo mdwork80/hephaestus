@@ -44,6 +44,7 @@ Replaces the Copier template's Jinja-conditional filenames. Resolve top-to-botto
 ## Runtime pattern: others
 
 - `background_worker` / `scheduled_job` / `agent_pipeline` / `cli`: entrypoint skeleton wired to config + logging. Deep worker/job scaffolds (retries, dead-letter, overlap locks) are roadmap — note as TODO in the generated ARCHITECTURE.md rather than half-generating.
+- **MCP server** (task says "MCP server"; pattern `cli` for stdio, `api_service` for HTTP/SSE): apply invariants.md §MCP server projects — explicit tool allow-list, schema-validated inputs, redacted outputs, pinned filesystem/network scope; `tools/mcp/forge-ref/server.py` is the zero-dep stdio exemplar.
 - `library`: no entrypoint, no Dockerfile even if deployment ≠ local_only unless user insists; public-API module + doc stub.
 
 ## Containerized: `deployment_target != local_only`

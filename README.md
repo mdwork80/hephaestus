@@ -33,7 +33,7 @@ Registered in `.mcp.json`. All require your approval on first use; none auto-app
 
 | Server | Runtime needed | Provides |
 |---|---|---|
-| `forge-ref` | python3 only | Byte-stable deep templates (hardened Dockerfiles, compose, SHA-pinned CI, deploy + cosign gate, release + Sigstore, FastAPI/axum security middleware) and `validate_frontmatter` |
+| `forge-ref` | python3 only | Byte-stable deep templates (hardened Dockerfiles, compose, SHA-pinned CI, deploy + cosign gate, release + Sigstore, FastAPI/axum/Fastify/Go-chi security middleware), `validate_frontmatter`, `get_schema`, `scan_secrets` |
 | `bicep` | .NET 10 SDK (`dotnet dnx`) | Bicep authoring, compile diagnostics, Azure Verified Modules metadata, resource schemas |
 | `terraform` | Docker | Terraform provider/module registry lookups |
 | `aws-iac` | uv (`uvx`) | AWS CDK guidance, IaC patterns, CDK-Nag security checks |

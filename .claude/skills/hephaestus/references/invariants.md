@@ -85,6 +85,18 @@ Framework is language-idiomatic; the middleware contract is not negotiable:
 - ed25519 keys only; key-based auth only — no password auth, ever.
 - Server mode: `authorized_keys` file in `config/`, host key under `secrets/` (gitignored). Generated SECURITY.md notes server mode warrants `threat_model_required: true` and a real `auth_model`.
 
+## MCP server projects
+
+An MCP server is a first-class project type (`runtime_patterns`: `cli` for stdio transport, `api_service` when it serves HTTP/SSE). On top of the pattern's normal invariants:
+
+- **Explicit tool allow-list.** Every exposed tool is deliberately registered with a JSON Schema `inputSchema`; no dynamic/reflected tool registration. Removing a tool must be a code change, not config.
+- **Validate every tool input** against its schema before acting; reject with an in-band tool error, never a crash. Treat all tool arguments as untrusted.
+- **No secrets in tool output.** Redact by construction (the forge-ref `scan_secrets` redaction pattern: prefix + length, never the value).
+- **Filesystem/network scope pinned.** Tools that touch disk resolve paths against an allow-listed root and refuse traversal outside it; outbound calls limited to declared hosts, documented in SECURITY.md.
+- **stdio transport**: no auth needed (process boundary is the trust boundary), but log to stderr only — stdout is the protocol channel. **HTTP/SSE transport**: full web-service invariants apply (auth model must not be `none` when deployed — Rule 8 catches it), plus MCP-spec origin validation.
+- **Zero- or pinned-dependency bias.** Prefer the stdlib-only pattern (see `tools/mcp/forge-ref/server.py` as the exemplar) for small servers; otherwise hash-pinned SDK versions.
+- `ai_tooling` is at least `runtime_inference`; when the server's tools let a model act on external systems, treat as `agentic` (Rule 9 then forces the threat model).
+
 ## Documentation protocol (all projects)
 
 Generated PROJECT.md carries the three-layer Code Documentation Protocol verbatim in spirit:

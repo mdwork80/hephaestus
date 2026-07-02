@@ -160,6 +160,70 @@
       "description": "Fail-loud auth extractor stub returning 501 with model-specific guidance. Set exactly one auth_* flag.",
       "vars": ["auth_model"],
       "flags": ["auth_entra_id", "auth_api_key", "auth_managed_identity", "auth_mutual_tls"]
+    },
+    "fastify-app": {
+      "path": "middleware/fastify/app.ts",
+      "category": "middleware-fastify-ts",
+      "output": "src/app.ts",
+      "description": "Fastify app factory: request-id (sanitized inbound or UUID), trusted-host check, body limit, security headers (CSP behind is_web_app), pinned CORS behind has_cors, pino structured logs.",
+      "vars": ["project_name"],
+      "flags": ["has_cors", "is_web_app"]
+    },
+    "fastify-health": {
+      "path": "middleware/fastify/health.ts",
+      "category": "middleware-fastify-ts",
+      "output": "src/routes/health.ts",
+      "description": "Liveness (/health, no dependency checks) vs readiness (/ready, dependency probes) with the semantic distinction documented.",
+      "vars": [],
+      "flags": []
+    },
+    "fastify-errors": {
+      "path": "middleware/fastify/errors.ts",
+      "category": "middleware-fastify-ts",
+      "output": "src/errors.ts",
+      "description": "Sanitized error + 404 handlers: full detail to logs with request id, generic JSON to clients.",
+      "vars": [],
+      "flags": []
+    },
+    "fastify-auth-stub": {
+      "path": "middleware/fastify/auth.ts",
+      "category": "middleware-fastify-ts",
+      "output": "src/auth.ts",
+      "description": "Fail-loud preHandler auth stub returning 501 with model-specific guidance. Set exactly one auth_* flag.",
+      "vars": ["auth_model"],
+      "flags": ["auth_entra_id", "auth_api_key", "auth_managed_identity", "auth_mutual_tls"]
+    },
+    "gochi-router": {
+      "path": "middleware/gochi/router.go",
+      "category": "middleware-go-chi",
+      "output": "internal/httpserver/router.go",
+      "description": "chi router factory: sanitized recoverer, request-id + echo, structured logging, trusted-host, size limits, security headers, pinned CORS behind has_cors.",
+      "vars": ["project_name"],
+      "flags": ["has_cors"]
+    },
+    "gochi-middleware": {
+      "path": "middleware/gochi/middleware.go",
+      "category": "middleware-go-chi",
+      "output": "internal/httpserver/middleware.go",
+      "description": "Security headers (CSP behind is_web_app), trusted-host filter, declared Content-Length 413 + MaxBytesReader, request-id echo, pinned CORS behind has_cors.",
+      "vars": [],
+      "flags": ["has_cors", "is_web_app"]
+    },
+    "gochi-handlers": {
+      "path": "middleware/gochi/handlers.go",
+      "category": "middleware-go-chi",
+      "output": "internal/httpserver/handlers.go",
+      "description": "Health/ready handlers, structured 404, panic-to-sanitized-500 recoverer, slog request logging.",
+      "vars": [],
+      "flags": []
+    },
+    "gochi-auth-stub": {
+      "path": "middleware/gochi/auth.go",
+      "category": "middleware-go-chi",
+      "output": "internal/httpserver/auth.go",
+      "description": "Fail-loud auth middleware stub returning 501 with model-specific guidance. Set exactly one auth_* flag.",
+      "vars": ["auth_model"],
+      "flags": ["auth_entra_id", "auth_api_key", "auth_managed_identity", "auth_mutual_tls"]
     }
   }
 }
