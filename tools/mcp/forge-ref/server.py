@@ -454,7 +454,83 @@ def handle(msg: dict) -> dict | None:
     return _response(req_id, error={"code": -32601, "message": f"method not found: {method}"})
 
 
+def selftest() -> int:
+    """
+    Purpose: Layer-3 integrity check for this repo (see docs/ARCHITECTURE.md).
+    Verifies (1) fixture agreement with the validator per
+    [schema-validator-lockstep], (2) render sanity, (3) logic-ref integrity:
+    unique @logic-ref IDs in tools/mcp source, every ID referenced by an
+    ACTIVE ARCHITECTURE.md entry exists, ungoverned source IDs warn only.
+    Rationale: deterministic and offline so pre-commit/hooks never depend on
+    model discipline or network. @logic-ref: forge-ref-selftest
+    """
+    failures: list[str] = []
+    fixtures = ROOT / "fixtures"
+
+    # 1. Fixture agreement.
+    valid = validate_frontmatter((fixtures / "valid-project.md").read_text(), check_cadence=False)
+    if not valid["valid"]:
+        failures.append(f"valid-project.md rejected: {valid['errors']}")
+    expected = json.loads((fixtures / "invalid-expected.json").read_text())
+    invalid = validate_frontmatter(
+        (fixtures / "invalid-project.md").read_text(),
+        check_cadence=expected["check_cadence"],
+    )
+    got = sorted(e.split(":", 1)[0] for e in invalid["errors"])
+    want = sorted(expected["expected_prefixes"])
+    if got != want:
+        failures.append(f"invalid-project.md error prefixes drifted:\n  want {want}\n  got  {got}")
+
+    # 2. Render sanity.
+    try:
+        text = render_template("docker-python", {"project_name": "Fixture App", "project_slug": "fixture-app", "is_web": True})
+        for marker in ("#IF", "#ELSE", "#ENDIF"):
+            if marker in text:
+                failures.append(f"docker-python render leaked {marker}")
+        if "FIXTURE_APP_SERVER__HOST=0.0.0.0" not in text:
+            failures.append("docker-python render lost the slug_upper web host line")
+    except Exception as exc:
+        failures.append(f"docker-python render raised: {exc}")
+
+    # 3. Logic-ref integrity.
+    ref_re = re.compile(r"@logic-ref:\s*([a-z0-9]+(?:-[a-z0-9]+)+)")
+    source_ids: dict[str, int] = {}
+    for path in sorted(ROOT.rglob("*.py")):
+        for rid in ref_re.findall(path.read_text()):
+            source_ids[rid] = source_ids.get(rid, 0) + 1
+    dupes = [rid for rid, n in source_ids.items() if n > 1]
+    if dupes:
+        failures.append(f"duplicate @logic-ref IDs: {dupes}")
+    arch = ROOT.parents[2] / "docs" / "ARCHITECTURE.md"
+    governed: set[str] = set()
+    if arch.exists():
+        for block in arch.read_text().split("\n---\n"):
+            # Exact status line only — the [template-example] block mentions
+            # ACTIVE inside a choice list and must not count.
+            if not re.search(r"^- Status: ACTIVE\s*$", block, re.M):
+                continue
+            m = re.search(r"Affected @logic-refs:\s*((?:[a-z0-9]+(?:-[a-z0-9]+)+\s*)+)", block)
+            if m:
+                governed.update(m.group(1).split())
+        missing = governed - set(source_ids)
+        if missing:
+            failures.append(f"ARCHITECTURE.md ACTIVE entries reference missing @logic-refs: {sorted(missing)}")
+    else:
+        failures.append("docs/ARCHITECTURE.md not found")
+    for rid in sorted(set(source_ids) - governed):
+        print(f"warning: @logic-ref {rid} not governed by any ACTIVE ARCHITECTURE.md entry", file=sys.stderr)
+
+    if failures:
+        for f in failures:
+            print(f"SELFTEST FAIL: {f}", file=sys.stderr)
+        return 1
+    print("selftest OK: fixtures agree, renders clean, logic-refs intact")
+    return 0
+
+
 def main() -> None:
+    if "--selftest" in sys.argv[1:]:
+        sys.exit(selftest())
     for line in sys.stdin:
         line = line.strip()
         if not line:

@@ -25,6 +25,18 @@ if [ -n "$missing" ]; then
   echo ""
 fi
 
+# --- 1c. forge-ref selftest (Layer 3, docs/ARCHITECTURE.md) -------------------
+# Fixture/validator lockstep + render sanity + logic-ref integrity. Fast,
+# offline, zero-dep. Only meaningful where the server exists (base repo and
+# clones that keep tools/mcp).
+if [ -f "$ROOT/tools/mcp/forge-ref/server.py" ]; then
+  if ! selftest_out="$(python3 "$ROOT/tools/mcp/forge-ref/server.py" --selftest 2>&1)"; then
+    echo "FORGE-REF SELFTEST FAILED — schema/validator/fixtures drifted; fix before scaffolding:"
+    echo "$selftest_out" | grep "SELFTEST FAIL" | head -5
+    echo ""
+  fi
+fi
+
 # --- 2. Hephaestus drift scan -----------------------------------------------
 # Base-template guard: a fresh clone and the base repo are byte-identical, so
 # the only cheap distinguisher is the directory name — clones get project-named

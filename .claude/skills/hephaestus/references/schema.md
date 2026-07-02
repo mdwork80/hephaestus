@@ -2,6 +2,8 @@
 
 Ported from `tools/project-forge/template/_schema/project_frontmatter.py` (Pydantic, v0.11.0 line). Every field bound and cross-field rule below is authoritative. Unknown frontmatter fields are a bug, not a feature (the old schema used `extra="forbid"`). Changing a rule is a governance decision — edit this file deliberately, never ad hoc during a scaffold.
 
+**Lockstep contract (`[schema-validator-lockstep]`, docs/ARCHITECTURE.md):** any change to a field bound, enum, or cross-field rule updates, in the SAME commit: this file, `tools/mcp/forge-ref/server.py` `validate_frontmatter`, and the fixture pair in `tools/mcp/forge-ref/fixtures/`. Verify with `python3 tools/mcp/forge-ref/server.py --selftest` before committing.
+
 ## Fields
 
 ### Identity

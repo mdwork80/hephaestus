@@ -1,0 +1,15 @@
+{
+  "_comment": "Error-prefix set the validator MUST produce for invalid-project.md with check_cadence=true. Exact match on prefixes (before the colon): missing one = validator lost a rule; extra one = fixture or validator changed without updating the other. Update in the SAME commit as any schema.md rule change ([schema-validator-lockstep]).",
+  "check_cadence": true,
+  "expected_prefixes": [
+    "cors_origins",
+    "Rule 2",
+    "Rule 3",
+    "Rule 3",
+    "Rule 4",
+    "Rule 5",
+    "Rule 8",
+    "Rule 9",
+    "cadence"
+  ]
+}
