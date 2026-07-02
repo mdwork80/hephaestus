@@ -29,4 +29,7 @@ license: Proprietary
 ai_tooling: agentic
 review_cadence_days: 180
 last_reviewed: 2020-01-01
+
+hephaestus_version: 0.1.0
+hephaestus_base: https://example.com/hephaestus.git
 ---

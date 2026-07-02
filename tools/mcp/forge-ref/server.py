@@ -164,10 +164,12 @@ REQUIRED_FIELDS = [
     "network_isolation", "languages", "runtime_patterns", "azure_services",
     "cors_origins", "threat_model_required", "secrets_backend", "auth_model",
     "license", "ai_tooling", "review_cadence_days", "last_reviewed",
+    # Scaffold provenance: bootstrap/adopt always write these. The version
+    # source is the kit-internal tools/mcp/forge-ref/VERSION — deliberately
+    # NOT a repo-root VERSION file, which adopted projects may own.
+    "hephaestus_version", "hephaestus_base",
 ]
-# Scaffold-provenance fields: bootstrap/adopt always write them, but projects
-# scaffolded before they existed may lack them, so they stay optional.
-OPTIONAL_FIELDS = ["hephaestus_version", "hephaestus_base"]
+OPTIONAL_FIELDS: list[str] = []
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 
 
@@ -248,9 +250,9 @@ def validate_frontmatter(text: str, check_cadence: bool = False) -> dict:
     if errors:
         return {"valid": False, "errors": errors}
 
-    if "hephaestus_version" in fm and not VERSION_RE.match(str(fm["hephaestus_version"])):
+    if not VERSION_RE.match(str(fm["hephaestus_version"])):
         errors.append("hephaestus_version must be semver (X.Y.Z)")
-    if "hephaestus_base" in fm and not (1 <= len(str(fm["hephaestus_base"])) <= 300):
+    if not (1 <= len(str(fm["hephaestus_base"])) <= 300):
         errors.append("hephaestus_base must be 1-300 characters")
 
     # --- field bounds ---------------------------------------------------
@@ -452,7 +454,7 @@ def build_schema() -> dict:
     @logic-ref: forge-ref-schema-as-data
     """
     version = "unknown"
-    vf = ROOT.parents[2] / "VERSION"
+    vf = ROOT / "VERSION"
     if vf.exists():
         version = vf.read_text().strip()
     return {
@@ -482,8 +484,8 @@ def build_schema() -> dict:
             "ai_tooling": {"type": "enum", "values": sorted(AI_TOOLINGS)},
             "review_cadence_days": {"type": "int", "min": 30, "max": 730},
             "last_reviewed": {"type": "date", "pattern": DATE_RE.pattern},
-            "hephaestus_version": {"type": "str", "pattern": VERSION_RE.pattern, "optional": True},
-            "hephaestus_base": {"type": "str", "min_len": 1, "max_len": 300, "optional": True},
+            "hephaestus_version": {"type": "str", "pattern": VERSION_RE.pattern},
+            "hephaestus_base": {"type": "str", "min_len": 1, "max_len": 300},
         },
         "cross_field_rules": [
             {"id": 1, "if": {"deployment_target": "local_only"}, "require": "azure_services == []",
@@ -764,7 +766,7 @@ def selftest() -> int:
         failures.append("get_schema cross_field_rules must be exactly ids 1-11")
     if set(schema["required_fields"]) != set(REQUIRED_FIELDS) or set(schema["optional_fields"]) != set(OPTIONAL_FIELDS):
         failures.append("get_schema field lists drifted from validator constants")
-    vf = ROOT.parents[2] / "VERSION"
+    vf = ROOT / "VERSION"
     if vf.exists() and schema["hephaestus_version"] != vf.read_text().strip():
         failures.append("get_schema version drifted from VERSION file")
 
