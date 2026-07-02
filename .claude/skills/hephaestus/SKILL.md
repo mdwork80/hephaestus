@@ -79,4 +79,9 @@ No pre-write confirmation — this skill acts, then reports. End with:
 
 > **STATUS:** the `forge-ref` MCP server (`tools/mcp/forge-ref/`, registered in `.mcp.json`) now serves the battle-tested deep templates as byte-stable rendered assets: hardened Dockerfiles (python/rust), compose, dockerignore, SHA-pinned CI (python/rust), deploy (OIDC + cosign gate), release (GHCR + Sigstore), and the FastAPI/axum security-middleware stacks — plus a `validate_frontmatter` tool implementing the full schema. Prefer its output over free generation; `references/invariants.md` remains the authority for judging any gap or extension.
 >
-> **PENDING:** Azure IaC (Bicep modules — VNet, private endpoints, Front Door/App Gateway edge) is deliberately NOT in forge-ref; it will come from a dedicated Bicep MCP server integration. Until that lands, Bicep output is prose-generated against invariants.md §Azure infra — flag that to the user whenever emitting infra/.
+> **IaC MCP servers (registered in `.mcp.json`, per-machine runtimes required):**
+> - `bicep` (`Azure.Bicep.McpServer` via dotnet dnx, needs .NET 10 SDK) — use for ALL `infra/` Bicep work: `get_bicep_best_practices` before authoring, `list_avm_metadata` to prefer Azure Verified Modules, resource-type schemas while writing, `build_bicep` / `get_bicep_file_diagnostics` to verify every emitted file compiles clean. invariants.md §Azure infra still governs WHAT to build (private endpoints, least-privilege RBAC, edge modules); the MCP server governs correctness.
+> - `terraform` (hashicorp/terraform-mcp-server via docker) — provider/module registry lookups and plan guidance when a project chooses Terraform over Bicep or targets multi_cloud.
+> - `aws-iac` (`awslabs.aws-iac-mcp-server` via uvx) — CDK guidance, patterns, and CDK-Nag security checks for AWS targets (successor to the deprecated CDK MCP server).
+>
+> All IaC servers require user approval on first use (project-scope `.mcp.json`, no auto-approve) and their tool calls prompt like any other tool. If a required runtime is missing (session-start hook warns), fall back to prose generation against invariants.md and say so in the decisions report.

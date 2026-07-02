@@ -3,6 +3,21 @@
     "forge-ref": {
       "command": "python3",
       "args": ["tools/mcp/forge-ref/server.py"]
+    },
+    "bicep": {
+      "command": "dotnet",
+      "args": ["dnx", "-y", "Azure.Bicep.McpServer"]
+    },
+    "terraform": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "hashicorp/terraform-mcp-server"]
+    },
+    "aws-iac": {
+      "command": "uvx",
+      "args": ["awslabs.aws-iac-mcp-server@latest"],
+      "env": {
+        "FASTMCP_LOG_LEVEL": "ERROR"
+      }
     }
   }
 }

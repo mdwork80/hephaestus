@@ -14,6 +14,17 @@ echo "from the FIRST response onward: terse, no filler, all technical"
 echo "substance intact. Off only on 'stop caveman' / 'normal mode'."
 echo ""
 
+# --- 1b. MCP runtime prerequisites -------------------------------------------
+# .mcp.json servers need these on each machine; warn, never block.
+missing=""
+command -v dotnet >/dev/null 2>&1 || missing="$missing dotnet(.NET-10-SDK→bicep)"
+command -v docker >/dev/null 2>&1 || missing="$missing docker(→terraform)"
+command -v uvx   >/dev/null 2>&1 || missing="$missing uvx(uv→aws-iac)"
+if [ -n "$missing" ]; then
+  echo "MCP runtimes missing:${missing}. Matching .mcp.json servers stay dead until installed; forge-ref (python3) unaffected."
+  echo ""
+fi
+
 # --- 2. Hephaestus drift scan -----------------------------------------------
 # Base-template guard: a fresh clone and the base repo are byte-identical, so
 # the only cheap distinguisher is the directory name — clones get project-named
