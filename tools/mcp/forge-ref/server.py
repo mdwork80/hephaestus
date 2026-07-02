@@ -350,6 +350,82 @@ def validate_frontmatter(text: str, check_cadence: bool = False) -> dict:
     return {"valid": not errors, "errors": errors}
 
 
+def build_schema() -> dict:
+    """
+    Purpose: emit the governance contract as machine-readable data so
+    generated per-language validators interpret a schema.json instead of
+    hardcoding rules — sync mode updates the data, validator logic never
+    drifts. Single source: the same constants validate_frontmatter uses.
+    @logic-ref: forge-ref-schema-as-data
+    """
+    version = "unknown"
+    vf = ROOT.parents[2] / "VERSION"
+    if vf.exists():
+        version = vf.read_text().strip()
+    return {
+        "hephaestus_version": version,
+        "required_fields": REQUIRED_FIELDS,
+        "optional_fields": OPTIONAL_FIELDS,
+        "fields": {
+            "project_name": {"type": "str", "min_len": 1, "max_len": 120},
+            "project_slug": {"type": "str", "pattern": SLUG_RE.pattern, "min_len": 2, "max_len": 64},
+            "description": {"type": "str", "min_len": 10, "max_len": 280},
+            "owner": {"type": "str", "min_len": 1, "max_len": 120},
+            "lifecycle_stage": {"type": "enum", "values": ["prototype", "pilot", "production", "maintenance", "sunset"]},
+            "data_classification": {"type": "enum", "values": sorted(DATA_CLASSIFICATIONS)},
+            "data_types": {"type": "list", "values": sorted(DATA_TYPES), "min_len": 1, "no_none_mix": True, "unique": True},
+            "compliance_scope": {"type": "list", "values": sorted(COMPLIANCE_SCOPES), "min_len": 1, "no_none_mix": True, "unique": True},
+            "deployment_target": {"type": "enum", "values": sorted(DEPLOYMENT_TARGETS)},
+            "network_isolation": {"type": "enum", "values": sorted(NETWORK_ISOLATIONS)},
+            "languages": {"type": "list", "values": None, "min_len": 1, "unique": True, "comment": "free-form lowercase identifiers; first = primary"},
+            "runtime_patterns": {"type": "list", "values": sorted(RUNTIME_PATTERNS), "min_len": 1, "unique": True},
+            "azure_services": {"type": "list", "values": sorted(AZURE_SERVICES), "min_len": 0, "unique": True},
+            "cors_origins": {"type": "list", "values": None, "min_len": 0, "unique": True,
+                             "entry_rules": ["no wildcards", "https:// or http://localhost only", "bare origin (no path/query/fragment)", "non-empty"]},
+            "threat_model_required": {"type": "bool"},
+            "secrets_backend": {"type": "enum", "values": sorted(SECRETS_BACKENDS)},
+            "auth_model": {"type": "enum", "values": sorted(AUTH_MODELS)},
+            "license": {"type": "str", "min_len": 1, "max_len": 64},
+            "ai_tooling": {"type": "enum", "values": sorted(AI_TOOLINGS)},
+            "review_cadence_days": {"type": "int", "min": 30, "max": 730},
+            "last_reviewed": {"type": "date", "pattern": DATE_RE.pattern},
+            "hephaestus_version": {"type": "str", "pattern": VERSION_RE.pattern, "optional": True},
+            "hephaestus_base": {"type": "str", "min_len": 1, "max_len": 300, "optional": True},
+        },
+        "cross_field_rules": [
+            {"id": 1, "if": {"deployment_target": "local_only"}, "require": "azure_services == []",
+             "message": "azure_services must be empty when deployment_target is 'local_only'"},
+            {"id": 2, "if": {"data_classification": "regulated"}, "require": "secrets_backend != 'dotenv_local'",
+             "message": "secrets_backend 'dotenv_local' not permitted for regulated data"},
+            {"id": 3, "if": {"secrets_backend": "dotenv_local"},
+             "require": "deployment_target == 'local_only' and data_classification in ('public','internal')",
+             "message": "'dotenv_local' requires local_only deployment and public/internal classification"},
+            {"id": 4, "if": "any compliance_scope != 'none' or data_classification in ('confidential','regulated')",
+             "require": "threat_model_required == true",
+             "message": "threat_model_required must be true (classification/compliance trigger)"},
+            {"id": 5, "if": "'phi' in data_types", "require": "'hipaa' in compliance_scope",
+             "message": "data_types 'phi' requires compliance_scope 'hipaa'"},
+            {"id": 6, "if": "'cui' in data_types",
+             "require": "compliance_scope intersects ('cmmc_l1','cmmc_l2','cmmc_l3','nist_800_171')",
+             "message": "data_types 'cui' requires a CMMC level or nist_800_171"},
+            {"id": 7, "if": "'pci' in data_types", "require": "'pci_dss' in compliance_scope",
+             "message": "data_types 'pci' requires compliance_scope 'pci_dss'"},
+            {"id": 8, "if": {"auth_model": "none"},
+             "require": "all runtime_patterns in ('cli','library') or deployment_target == 'local_only'",
+             "message": "auth_model 'none' requires all-cli/library patterns or local_only"},
+            {"id": 9, "if": {"ai_tooling": "agentic"}, "require": "threat_model_required == true",
+             "message": "ai_tooling 'agentic' requires threat_model_required true"},
+            {"id": 10, "if": "cors_origins != []",
+             "require": "runtime_patterns intersects ('web_app','api_service')",
+             "message": "cors_origins requires runtime_patterns web_app or api_service"},
+            {"id": 11, "if": {"network_isolation": "private"},
+             "require": "deployment_target in ('azure','hybrid')",
+             "message": "network_isolation 'private' requires deployment_target azure/hybrid"},
+        ],
+        "cadence_check": "fail when today > last_reviewed + review_cadence_days",
+    }
+
+
 # =============================================================================
 # MCP tool definitions and dispatch
 # =============================================================================
@@ -387,6 +463,16 @@ TOOLS = [
         },
     },
     {
+        "name": "get_schema",
+        "description": (
+            "Return the governance contract as machine-readable JSON: fields "
+            "(types, bounds, enums), the 11 cross-field rules, and the kit "
+            "version. Generated projects ship this as _schema/schema.json and "
+            "their validators interpret it, so rule changes are data updates."
+        ),
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
         "name": "validate_frontmatter",
         "description": (
             "Validate PROJECT.md frontmatter against the hephaestus governance "
@@ -418,6 +504,8 @@ def call_tool(name: str, arguments: dict) -> str:
         return json.dumps(listing, indent=2)
     if name == "get_template":
         return render_template(arguments["name"], arguments.get("params") or {})
+    if name == "get_schema":
+        return json.dumps(build_schema(), indent=2)
     if name == "validate_frontmatter":
         result = validate_frontmatter(arguments["text"], bool(arguments.get("check_cadence")))
         return json.dumps(result, indent=2)
@@ -500,6 +588,16 @@ def selftest() -> int:
             failures.append("docker-python render lost the slug_upper web host line")
     except Exception as exc:
         failures.append(f"docker-python render raised: {exc}")
+
+    # 2b. Schema-as-data agreement.
+    schema = build_schema()
+    if [r["id"] for r in schema["cross_field_rules"]] != list(range(1, 12)):
+        failures.append("get_schema cross_field_rules must be exactly ids 1-11")
+    if set(schema["required_fields"]) != set(REQUIRED_FIELDS) or set(schema["optional_fields"]) != set(OPTIONAL_FIELDS):
+        failures.append("get_schema field lists drifted from validator constants")
+    vf = ROOT.parents[2] / "VERSION"
+    if vf.exists() and schema["hephaestus_version"] != vf.read_text().strip():
+        failures.append("get_schema version drifted from VERSION file")
 
     # 3. Logic-ref integrity.
     ref_re = re.compile(r"@logic-ref:\s*([a-z0-9]+(?:-[a-z0-9]+)+)")

@@ -53,6 +53,7 @@ repo); `[schema-validator-lockstep]` supersedes that repo's
   forge-ref `validate_frontmatter` against the same PROJECT.md the in-project
   validator accepts.
 - Affected @logic-refs: forge-ref-frontmatter-validator forge-ref-selftest
+  forge-ref-schema-as-data
 - Status: ACTIVE
 
 ---

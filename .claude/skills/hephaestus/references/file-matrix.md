@@ -19,7 +19,8 @@ Replaces the Copier template's Jinja-conditional filenames. Resolve top-to-botto
 | `.github/workflows/ci.yml` | Per invariants.md §CI |
 | `.github/dependabot.yml` | Ecosystems: github-actions + language package ecosystem + docker when containerized |
 | `.github/CODEOWNERS` | May be the same file as root CODEOWNERS — pick one location, not both |
-| frontmatter validator | In-project, project's language (or natural companion). All schema.md bounds + 11 rules + `--check-cadence`. Path per language convention (`scripts/`, `src/bin/`, `tools/`) |
+| `_schema/schema.json` | Output of forge-ref `get_schema`, copied verbatim. The machine-readable contract the in-project validator interprets; sync mode refreshes it |
+| frontmatter validator | In-project, project's language (or natural companion). A thin INTERPRETER of `_schema/schema.json` (field bounds, enums, the 11 rules as data) + `--check-cadence` — do NOT hardcode rules in validator logic. Path per language convention (`scripts/`, `src/bin/`, `tools/`) |
 | logic-ref checker | In-project, same language as validator. Rules: unique `@logic-ref` IDs in source; every ID referenced by an ACTIVE ARCHITECTURE.md entry exists; ungoverned source IDs = advisory warning; deprecated entries may reference removed IDs. `--index` mode lists all IDs |
 
 ## Language scaffold (every language)
