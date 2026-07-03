@@ -1,0 +1,44 @@
+name: Release
+
+# Publishes a GitHub Release for every kit version tag (v*). The tag is the
+# release trigger; create it in the same flow as the VERSION bump:
+#   git tag -a vX.Y.Z -m "<summary>" && git push origin main --tags
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write   # create the release
+
+jobs:
+  release:
+    name: GitHub Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411  # v2.19.4
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0  # v6.0.3
+
+      - name: Verify tag matches kit VERSION
+        run: |
+          KIT="v$(cat tools/mcp/forge-ref/VERSION)"
+          TAG="${GITHUB_REF_NAME}"
+          if [ "$KIT" != "$TAG" ]; then
+            echo "Tag $TAG does not match kit VERSION $KIT — tag the commit that bumped VERSION." >&2
+            exit 1
+          fi
+          echo "OK: $TAG matches kit VERSION"
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "hephaestus kit $GITHUB_REF_NAME" \
+            --notes "$(git tag -l --format='%(contents)' "$GITHUB_REF_NAME")" \
+            --generate-notes
