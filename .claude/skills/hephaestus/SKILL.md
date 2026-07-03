@@ -52,7 +52,7 @@ Run via Bash in the project dir. Tool present → run; absent → skip and list 
 1. Lockfile per language (`uv lock`, `cargo generate-lockfile`, `npm install --package-lock-only`, `go mod tidy`, …).
 2. `detect-secrets scan --all-files > .secrets.baseline` (direct, `uv run --with detect-secrets`, or `pipx run`).
 3. Run the generated frontmatter validator against the generated PROJECT.md. NOT optional — if its runtime is missing, validate manually against schema.md and say so.
-4. `pre-commit install` if pre-commit is available; initial commit only if the user asked for one.
+4. `pre-commit install --hook-type pre-commit --hook-type pre-push` if pre-commit is available (the pre-push stage carries the kit scan_secrets gate); initial commit only if the user asked for one.
 
 ### 6. Report (replaces confirmation)
 
@@ -61,6 +61,7 @@ No pre-write confirmation — this skill acts, then reports. End with:
 - **Decisions table**: field → value → source (`inferred` / `default` / `auto-corrected: <rule>`).
 - File tree written; tasks run vs. skipped; validator result.
 - Corrections invited: any wrong inference, state it and hephaestus re-runs as an augment/fix pass.
+- **Explain-why format for every security item** (findings, gate failures, follow-ups): what it is → what an attacker does with it → the one-step fix. Jargon-only findings are report defects; the reader may have no security background.
 
 ## Augment workflow
 

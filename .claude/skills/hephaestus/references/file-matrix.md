@@ -8,13 +8,14 @@ Replaces the Copier template's Jinja-conditional filenames. Resolve top-to-botto
 |---|---|
 | `PROJECT.md` | Frontmatter per schema.md layout + Charter / Scope / Key decisions (ADRs under `docs/adr/`) / Code Documentation Protocol section / Status. Protocol section text: invariants.md §Documentation protocol |
 | `README.md` | What it is, config resolution order, how to run, how to develop (hooks install, test, lint) |
-| `SECURITY.md` | Content varies by `data_classification` + `compliance_scope`: reporting contact, secrets handling rules, hardening posture; regulated/confidential adds data-handling and access sections |
+| `SECURITY.md` | Content varies by `data_classification` + `compliance_scope`: reporting contact, secrets handling rules, hardening posture; regulated/confidential adds data-handling and access sections. Always includes the **going-public checklist**: full-history secrets scan, `.env` audit, rotate-anything-ever-pasted, before flipping a repo public |
+| `SECURITY_BASICS.md` | Plain-language, stack-tailored top-10 for users without a security background: where THIS project's secrets live and how they leak (screenshots, chat pastes, commits), what the gates catch and why deleting them hurts, rotation how-to with the actual provider URLs, deploy don'ts. Written for a human to actually read — no compliance prose |
 | `LICENSE` | Canonical SPDX text when a known identifier; short proprietary notice when `Proprietary` |
 | `CODEOWNERS` | Owner on `*`; extra protection on security-sensitive paths (`SECURITY.md`, validator, CI workflows, `PROJECT.md`, infra/) |
 | `.gitignore` | Language-idiomatic + always: `.env`, `secrets/`, venv/build dirs, editor cruft |
 | `.env.example` | Env contract: `SLUG_UPPER_` prefix, `__` nesting delimiter, one commented entry per configurable setting, no real values. Header warns: copy to `.env`, never commit, `KEY=value` no spaces |
 | `config/default.toml` | Committed defaults, NO secrets. `[runtime]` (environment, log_level) always; `[server]` when web/api; `[ai]` when ai_tooling ∈ (runtime_inference, agentic); `[ssh]` when ssh_scaffold ≠ none |
-| `.pre-commit-config.yaml` | Per invariants.md §Pre-commit |
+| `.pre-commit-config.yaml` | Per invariants.md §Pre-commit and pre-push — includes the kit-guaranteed `scan_secrets` pre-push gate |
 | `docs/ARCHITECTURE.md` | Layer-2 decision log seeded with the `[decision-id]` entry template |
 | `.github/workflows/ci.yml` | Per invariants.md §CI |
 | `.github/dependabot.yml` | Ecosystems: github-actions + language package ecosystem + docker when containerized |
@@ -72,7 +73,7 @@ Replaces the Copier template's Jinja-conditional filenames. Resolve top-to-botto
 | File | Condition |
 |---|---|
 | `THREAT_MODEL.md` | `threat_model_required: true`. STRIDE-lite template: assets, trust boundaries, threats, mitigations, residual risk — pre-seeded from the answers (data types, auth model, exposure) |
-| `docs/AGENT_SAFETY.md` | `ai_tooling: agentic`. Tool allow-listing, prompt-injection posture, output validation, sandboxing expectations |
+| `docs/AGENT_SAFETY.md` + guard stubs | `ai_tooling` ∈ (`runtime_inference`, `agentic`). The doc PLUS enforced code per invariants.md §AI runtime: input/output boundary module (untrusted-content wrapper, output validator), tool allow-list registry, spend-cap config keys — stubs fail loud, never pass through |
 | SSH modules (`src/.../ssh/`) + `config/authorized_keys` (server) + `[ssh]` config/env sections | `ssh_scaffold != none`. ed25519 only, key-based auth only, host key path on disk never committed |
 
 ## Post-generation artifacts (created by tasks, not written by hand)

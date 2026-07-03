@@ -142,6 +142,55 @@ jobs:
         uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e  # v3.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#IF networked
+
+  # ==========================================================================
+  # Deploy readiness: scaffold placeholders must never reach a network.
+  # Grep-based on purpose — zero dependencies, no judgment calls.
+  # Fix the cause; removing this job requires a risk-acknowledged
+  # ARCHITECTURE.md entry (see the gate-integrity rule).
+  # ==========================================================================
+  deploy-readiness:
+    name: Deploy readiness
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0  # v6.0.3
+
+      - name: Auth stub must be implemented before deploy
+        run: |
+          if grep -rEn "authentication_not_implemented|NotImplementedError.*[Aa]uth|Complete .*auth.* before protecting" --include='*.py' --include='*.rs' --include='*.ts' --include='*.go' src/ 2>/dev/null; then
+            echo "" >&2
+            echo "FAIL: the authentication stub is still unimplemented." >&2
+            echo "What this stops: shipping an API where anyone on the internet can call every endpoint." >&2
+            echo "Fix: implement the auth check in the stub file above (guidance is in its comments), then remove the stub error." >&2
+            exit 1
+          fi
+          echo "OK: no auth stub markers in src/"
+
+      - name: No wildcard trusted hosts in committed config
+        run: |
+          if grep -rEn 'trusted_hosts *= *\[ *"\*" *\]' config/ 2>/dev/null; then
+            echo "" >&2
+            echo "FAIL: trusted_hosts is still the wildcard default." >&2
+            echo "What this stops: Host-header attacks against your deployed service." >&2
+            echo "Fix: list your real domain(s) in config, e.g. trusted_hosts = [\"api.example.com\"]." >&2
+            exit 1
+          fi
+          echo "OK: no wildcard trusted_hosts"
+
+      - name: No debug/development settings in committed config
+        run: |
+          if grep -rEn 'environment *= *"development"|debug *= *true' config/default.toml 2>/dev/null; then
+            echo "" >&2
+            echo "FAIL: committed default config still says development/debug." >&2
+            echo "What this stops: verbose errors and debug tooling exposed to the internet." >&2
+            echo "Fix: default.toml holds safe defaults; put development overrides in .env (gitignored)." >&2
+            exit 1
+          fi
+          echo "OK: committed defaults are not debug/development"
+#ENDIF
 #IF containerized
 
   # ==========================================================================

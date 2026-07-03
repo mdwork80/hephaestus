@@ -6,24 +6,40 @@
       "category": "docker",
       "output": "Dockerfile",
       "description": "Hardened multi-stage Python Dockerfile: uv frozen sync, digest-pinned base, non-root UID 10001, tini PID 1, stdlib healthcheck, pip stripped from runtime.",
-      "vars": ["project_name", "project_slug"],
-      "flags": ["is_web"]
+      "vars": [
+        "project_name",
+        "project_slug"
+      ],
+      "flags": [
+        "is_web"
+      ]
     },
     "docker-rust": {
       "path": "docker/rust.dockerfile",
       "category": "docker",
       "output": "Dockerfile",
       "description": "Hardened multi-stage Rust Dockerfile: cargo --locked release build, digest-pinned base, non-root UID 10001, tini PID 1, binary healthcheck subcommand.",
-      "vars": ["project_name", "project_slug"],
-      "flags": ["is_web", "ssh_server"]
+      "vars": [
+        "project_name",
+        "project_slug"
+      ],
+      "flags": [
+        "is_web",
+        "ssh_server"
+      ]
     },
     "compose": {
       "path": "docker/compose.yaml",
       "category": "docker",
       "output": "compose.yaml",
       "description": "Dev compose with prod-parity hardening: read-only rootfs, no-new-privileges, cap_drop ALL, tmpfs /tmp, localhost-only port binding, resource limits.",
-      "vars": ["project_name", "project_slug"],
-      "flags": ["is_web"]
+      "vars": [
+        "project_name",
+        "project_slug"
+      ],
+      "flags": [
+        "is_web"
+      ]
     },
     "dockerignore": {
       "path": "docker/dockerignore",
@@ -37,25 +53,42 @@
       "path": "ci/ci-python.yml",
       "category": "ci",
       "output": ".github/workflows/ci.yml",
-      "description": "SHA-pinned CI for Python: ruff/mypy/pytest matrix, frontmatter + logic-ref gates, bandit, pip-audit, SBOM, detect-secrets, gitleaks; container gates behind `containerized`, Bicep gates behind `azure`.",
+      "description": "SHA-pinned CI for Python: ruff/mypy/pytest matrix, frontmatter + logic-ref gates, bandit, pip-audit, SBOM, detect-secrets, gitleaks; container gates behind `containerized`, Bicep gates behind `azure`. Deploy-readiness placeholder greps behind `networked`.",
       "vars": [],
-      "flags": ["containerized", "azure"]
+      "flags": [
+        "containerized",
+        "azure",
+        "networked"
+      ]
     },
     "ci-rust": {
       "path": "ci/ci-rust.yml",
       "category": "ci",
       "output": ".github/workflows/ci.yml",
-      "description": "SHA-pinned CI for Rust: fmt/clippy/build/test --locked, governance binaries, cargo-audit/deny, SBOM, detect-secrets, gitleaks; container gates behind `containerized`, Bicep gates behind `azure`.",
+      "description": "SHA-pinned CI for Rust: fmt/clippy/build/test --locked, governance binaries, cargo-audit/deny, SBOM, detect-secrets, gitleaks; container gates behind `containerized`, Bicep gates behind `azure`. Deploy-readiness placeholder greps behind `networked`.",
       "vars": [],
-      "flags": ["containerized", "azure"]
+      "flags": [
+        "containerized",
+        "azure",
+        "networked"
+      ]
     },
     "deploy": {
       "path": "ci/deploy.yml",
       "category": "ci",
       "output": ".github/workflows/deploy.yml",
       "description": "Azure deploy via federated identity (OIDC, no long-lived secrets): what-if preview, cosign verify gate behind `cosign`, output extraction + /health smoke test steered by network flags.",
-      "vars": ["project_slug"],
-      "flags": ["cosign", "is_web", "smoke_test", "private_front_door", "private_app_gateway", "private_internal"]
+      "vars": [
+        "project_slug"
+      ],
+      "flags": [
+        "cosign",
+        "is_web",
+        "smoke_test",
+        "private_front_door",
+        "private_app_gateway",
+        "private_internal"
+      ]
     },
     "release": {
       "path": "ci/release.yml",
@@ -70,8 +103,13 @@
       "category": "middleware-fastapi",
       "output": "src/<pkg>/app.py",
       "description": "FastAPI app factory with ordered middleware stack (trusted host, size limit, optional CORS, request-id, security headers), prod-gated docs URLs, request-id log enrichment.",
-      "vars": ["project_name", "project_slug"],
-      "flags": ["has_cors"]
+      "vars": [
+        "project_name",
+        "project_slug"
+      ],
+      "flags": [
+        "has_cors"
+      ]
     },
     "fastapi-request-id": {
       "path": "middleware/fastapi/request_id.py",
@@ -87,7 +125,9 @@
       "output": "src/<pkg>/middleware/security.py",
       "description": "Security headers middleware (nosniff, DENY, referrer/permissions policy, CSP behind `is_web_app`) + declared Content-Length 413 limiter.",
       "vars": [],
-      "flags": ["is_web_app"]
+      "flags": [
+        "is_web_app"
+      ]
     },
     "fastapi-health": {
       "path": "middleware/fastapi/health.py",
@@ -110,8 +150,16 @@
       "category": "middleware-fastapi",
       "output": "src/<pkg>/dependencies.py",
       "description": "Fail-loud auth dependency stub with model-specific implementation guidance; raises NotImplementedError, never a fake pass-through. Set exactly one auth_* flag.",
-      "vars": ["project_slug", "auth_model"],
-      "flags": ["auth_entra_id", "auth_api_key", "auth_managed_identity", "auth_mutual_tls"]
+      "vars": [
+        "project_slug",
+        "auth_model"
+      ],
+      "flags": [
+        "auth_entra_id",
+        "auth_api_key",
+        "auth_managed_identity",
+        "auth_mutual_tls"
+      ]
     },
     "axum-app": {
       "path": "middleware/axum/app.rs",
@@ -119,7 +167,9 @@
       "output": "src/http-adjacent app.rs (see project layout)",
       "description": "axum Router factory: catch-panic, request-id set/propagate, trace, trusted-host, declared+actual size limits, pinned CORS, security headers, CSP behind `is_web_app`.",
       "vars": [],
-      "flags": ["is_web_app"]
+      "flags": [
+        "is_web_app"
+      ]
     },
     "axum-middleware": {
       "path": "middleware/axum/middleware.rs",
@@ -151,23 +201,37 @@
       "output": "src/http/mod.rs",
       "description": "HTTP module wiring; auth module included behind `has_auth`.",
       "vars": [],
-      "flags": ["has_auth"]
+      "flags": [
+        "has_auth"
+      ]
     },
     "axum-auth-stub": {
       "path": "middleware/axum/auth.rs",
       "category": "middleware-axum",
       "output": "src/http/auth.rs",
       "description": "Fail-loud auth extractor stub returning 501 with model-specific guidance. Set exactly one auth_* flag.",
-      "vars": ["auth_model"],
-      "flags": ["auth_entra_id", "auth_api_key", "auth_managed_identity", "auth_mutual_tls"]
+      "vars": [
+        "auth_model"
+      ],
+      "flags": [
+        "auth_entra_id",
+        "auth_api_key",
+        "auth_managed_identity",
+        "auth_mutual_tls"
+      ]
     },
     "fastify-app": {
       "path": "middleware/fastify/app.ts",
       "category": "middleware-fastify-ts",
       "output": "src/app.ts",
       "description": "Fastify app factory: request-id (sanitized inbound or UUID), trusted-host check, body limit, security headers (CSP behind is_web_app), pinned CORS behind has_cors, pino structured logs.",
-      "vars": ["project_name"],
-      "flags": ["has_cors", "is_web_app"]
+      "vars": [
+        "project_name"
+      ],
+      "flags": [
+        "has_cors",
+        "is_web_app"
+      ]
     },
     "fastify-health": {
       "path": "middleware/fastify/health.ts",
@@ -190,16 +254,27 @@
       "category": "middleware-fastify-ts",
       "output": "src/auth.ts",
       "description": "Fail-loud preHandler auth stub returning 501 with model-specific guidance. Set exactly one auth_* flag.",
-      "vars": ["auth_model"],
-      "flags": ["auth_entra_id", "auth_api_key", "auth_managed_identity", "auth_mutual_tls"]
+      "vars": [
+        "auth_model"
+      ],
+      "flags": [
+        "auth_entra_id",
+        "auth_api_key",
+        "auth_managed_identity",
+        "auth_mutual_tls"
+      ]
     },
     "gochi-router": {
       "path": "middleware/gochi/router.go",
       "category": "middleware-go-chi",
       "output": "internal/httpserver/router.go",
       "description": "chi router factory: sanitized recoverer, request-id + echo, structured logging, trusted-host, size limits, security headers, pinned CORS behind has_cors.",
-      "vars": ["project_name"],
-      "flags": ["has_cors"]
+      "vars": [
+        "project_name"
+      ],
+      "flags": [
+        "has_cors"
+      ]
     },
     "gochi-middleware": {
       "path": "middleware/gochi/middleware.go",
@@ -207,7 +282,10 @@
       "output": "internal/httpserver/middleware.go",
       "description": "Security headers (CSP behind is_web_app), trusted-host filter, declared Content-Length 413 + MaxBytesReader, request-id echo, pinned CORS behind has_cors.",
       "vars": [],
-      "flags": ["has_cors", "is_web_app"]
+      "flags": [
+        "has_cors",
+        "is_web_app"
+      ]
     },
     "gochi-handlers": {
       "path": "middleware/gochi/handlers.go",
@@ -222,8 +300,15 @@
       "category": "middleware-go-chi",
       "output": "internal/httpserver/auth.go",
       "description": "Fail-loud auth middleware stub returning 501 with model-specific guidance. Set exactly one auth_* flag.",
-      "vars": ["auth_model"],
-      "flags": ["auth_entra_id", "auth_api_key", "auth_managed_identity", "auth_mutual_tls"]
+      "vars": [
+        "auth_model"
+      ],
+      "flags": [
+        "auth_entra_id",
+        "auth_api_key",
+        "auth_managed_identity",
+        "auth_mutual_tls"
+      ]
     }
   }
 }

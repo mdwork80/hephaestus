@@ -20,7 +20,11 @@ What must be TRUE of each artifact, independent of language. These replace the b
 - Two secret scanners with different heuristics on purpose: gitleaks + detect-secrets (with `.secrets.baseline`).
 - Key material (SSH host keys, certs) lives on disk under `secrets/` (gitignored), never in committed config.
 
-## Pre-commit
+## Gate integrity (every gate, every project)
+
+Generated gates carry the seatbelt rule (CLAUDE.md standing rule 8) with them: children's instruction files include it, and every generated CI security job gets a one-line comment — "Fix the cause; removing this job requires a risk-acknowledged ARCHITECTURE.md entry." Gates fail with PLAIN-LANGUAGE messages (what this stops → what an attacker does → the fix), because a gate the user doesn't understand is a gate they'll delete.
+
+## Pre-commit and pre-push
 
 Every project, regardless of language:
 
@@ -29,6 +33,7 @@ Every project, regardless of language:
 3. Secrets: gitleaks + detect-secrets (baseline-excluded from its own scan, lockfiles excluded).
 4. Language block: formatter (check mode), linter (warnings = errors), SAST, dependency vulnerability audit, lockfile-drift check (fail when manifest changed without lockfile). See §Language mapping.
 5. Pin hook `rev`s to tags; local hooks use `language: system`.
+6. **Pre-push secrets gate** (the catastrophic-moment catch): a `pre-push`-stage local hook running `python3 tools/mcp/forge-ref/server.py --scan-secrets .` — kit-guaranteed, zero-dep, blocks the push on findings with rotation guidance in the failure message. Works even when the user never ran `pre-commit install` for commit-stage hooks, IF push-stage hooks are installed — so post-gen tasks run `pre-commit install --hook-type pre-commit --hook-type pre-push`.
 
 ## Container (`deployment_target != local_only`)
 
@@ -56,6 +61,15 @@ Framework is language-idiomatic; the middleware contract is not negotiable:
 - Sanitized error responses: no stack traces or internal paths to clients; full detail to structured logs.
 - Auth stub per `auth_model`: raises not-implemented with model-specific implementation guidance. Never generate a placeholder that silently allows requests.
 - Structured logging (JSON in production), level from config.
+
+## Deploy readiness (networked runtimes: `web_app` / `api_service`)
+
+A deterministic CI job (PR-stage AND wired as a gate in any deploy workflow) that greps for scaffold-time placeholders which must never reach a network:
+
+- Auth stub markers still present (`authentication_not_implemented`, `NotImplementedError.*[Aa]uth`, 501 stub) while `auth_model != none` → FAIL: "your API has no working login — anyone on the internet is an admin".
+- `trusted_hosts` / host allow-list still `["*"]` in committed prod config → FAIL with the tighten instruction.
+- Debug/development flags in committed prod config (`debug = true`, `environment = "development"` in deploy paths), docs/openapi endpoints unconditionally enabled → FAIL.
+- Every failure message follows the explain-why format. Grep-based on purpose: zero dependencies, no model judgment, can't be argued with.
 
 ## CI (`.github/workflows/ci.yml`)
 
@@ -99,6 +113,17 @@ Source layout follows the language's packaging best practice — this is an INVA
 | powershell/bash | `scripts/` or module dir; libraries separated from entrypoints |
 
 Root-level operational files (compose, manifests, config/, docs/) stay at root. Small single-file tools (one script + manifest) may stay flat — layout normalization applies once a project has multiple source modules.
+
+## AI runtime (`ai_tooling` ∈ `runtime_inference`, `agentic`)
+
+Vibe-coded AI apps are the highest-blast-radius category: untrusted content meets tool access meets a metered API key. These are enforced scaffold artifacts, not documentation:
+
+- **Prompt-injection posture, in code.** All retrieved/user/tool-returned content enters the model wrapped as DATA (delimited, labeled untrusted) — never concatenated into the instruction position. Scaffold emits the boundary module; app code routes every external string through it.
+- **Output validation before action.** Model output that drives anything (tool call, DB write, file path, shell) is schema-validated first; free text never becomes an argument directly. Fail-loud validator stub emitted.
+- **Tool allow-list registry** (agentic): tools registered explicitly with input schemas, same rules as §MCP server projects. No dynamic tool granting; a model cannot request a capability into existence.
+- **Spend caps.** `[ai]` config carries `max_tokens_per_request`, `max_requests_per_run`, and a hard budget note; the client wrapper enforces them. A leaked or looping key burns money at machine speed — say exactly that in SECURITY_BASICS.md.
+- **No executing model-generated code** outside an explicit sandbox decision recorded in ARCHITECTURE.md (Rule 9 already forces the threat model for agentic).
+- Keys are secrets like any other: `.env`/vault only, never in prompts, logs, or error messages; log redaction covers message content containing keys.
 
 ## MCP server projects
 
