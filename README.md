@@ -183,6 +183,8 @@ python3 tools/mcp/forge-ref/server.py --scan-secrets .      # zero-dep working-t
 python3 tools/mcp/forge-ref/server.py --emit-instructions   # regenerate AGENTS.md/GEMINI.md/copilot/cursor after editing CLAUDE.md
 ```
 
+**Bump `tools/mcp/forge-ref/VERSION` in any commit that changes kit content** (skills, hooks, forge-ref, `.mcp.json`) — child projects' sync mode compares it against their `hephaestus_version` and no-ops when equal, so an unbumped kit change never propagates.
+
 Two lockstep rules the selftest enforces: any governance-schema change updates `references/schema.md` + the validator + the fixtures in the same commit, and any `CLAUDE.md` edit regenerates the derived instruction files. CI (`.github/workflows/ci.yml`) runs the same gates plus shellcheck, hook dispatch smoke tests, and gitleaks over full history.
 
 ## License
