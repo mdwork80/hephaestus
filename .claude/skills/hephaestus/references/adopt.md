@@ -7,7 +7,7 @@ Direction of ingestion: the external project is copied INTO a fresh hephaestus c
 Non-negotiable rails, before any phase:
 
 - The external project folder is READ-ONLY throughout. All work happens in the clone.
-- After ingestion, adoption work runs on a `hephaestus/adopt` branch of the copied history, one checkpoint commit per phase, so any phase can also be reverted alone.
+- After ingestion, adoption work runs on a `hephaestus/adopt` branch of the copied history, one checkpoint commit per phase that changes files, so any phase can be reverted alone. Phases with nothing to change (e.g. no web code → Phase 5 no-op) skip the commit but MUST still appear in the Phase 7 report with their outcome: done / no-op / deferred — silent phase skips are indistinguishable from forgotten ones.
 - Never delete or rewrite user source logic. Adopt adds, moves, and configures; it does not refactor business code.
 - Every phase is idempotent — re-running adopt on a half-adopted repo detects what's done and continues.
 - Existing user code is respected as the source of truth about what the project IS; hephaestus artifacts adapt to it, not vice versa.
@@ -65,9 +65,14 @@ Validate the assembled frontmatter with forge-ref `validate_frontmatter`; auto-r
 
 Order matters: find the fires before rearranging the furniture.
 
-1. **Full-history secrets scan**: gitleaks across all commits + detect-secrets on the working tree (via `uv run --with`/`pipx run` when not installed; if neither runs, grep-based best effort and say so). Findings: report file+commit, add **rotation guidance** (a secret that ever touched git is burned — rotate it; history purge via `git filter-repo` is optional cleanup, rotation is not), then seed `.secrets.baseline`.
-2. **Hardcoded config inventory**: URLs, ports, timeouts, paths, credentials in source → migration list for the three-layer config stack. Migrate mechanically only where references are unambiguous; the rest goes in the suggestions list.
-3. **Posture flags**: wildcard CORS, missing auth on networked routes, disabled TLS verification, debug modes, committed `.env`. Each becomes a report finding with the invariant it violates.
+1. **Secrets scan — three layers, first one NOT optional**:
+   - **forge-ref `scan_secrets` ALWAYS runs** (MCP tool, or `python3 tools/mcp/forge-ref/server.py --scan-secrets .` — it ships in the kit, so "no scanner installed" is never true). Record files-scanned + findings counts as evidence in the Phase 7 report; a Phase 2 with no recorded scan output did not happen.
+   - gitleaks across all commits when available (history coverage forge-ref lacks).
+   - detect-secrets when available (via `uv run --with`/`pipx run`).
+   Findings: report file+commit, add **rotation guidance** (a secret that ever touched git is burned — rotate it; history purge via `git filter-repo` is optional cleanup, rotation is not).
+2. **`.secrets.baseline` is a REQUIRED artifact** — the generated CI's detect-secrets gate hard-fails without it. Seed it with detect-secrets when available; when not, list "generate and commit .secrets.baseline before first push (CI will fail until then)" as a BLOCKING item at the top of manual follow-ups — never silently omit it.
+3. **Hardcoded config inventory**: URLs, ports, timeouts, paths, credentials in source → migration list for the three-layer config stack. Migrate mechanically only where references are unambiguous; the rest goes in the suggestions list.
+4. **Posture flags**: wildcard CORS, missing auth on networked routes, disabled TLS verification, debug modes, committed `.env`. Each becomes a report finding with the invariant it violates.
 
 ## Phase 3 — Gap analysis (found state vs file-matrix)
 

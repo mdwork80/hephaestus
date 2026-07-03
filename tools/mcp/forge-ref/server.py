@@ -367,9 +367,12 @@ SECRET_PATTERNS: list[tuple[str, re.Pattern]] = [
     ("jwt", re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b")),
     ("azure-storage-key", re.compile(r"AccountKey=[A-Za-z0-9+/=]{60,}")),
     ("connection-string-password", re.compile(r"\b\w+://[^/\s:]+:([^@\s]{6,})@[\w.-]+")),
+    ("notion-token", re.compile(r"\bntn_[A-Za-z0-9]{30,}\b|\bsecret_[A-Za-z0-9]{40,}\b")),
     ("generic-assignment", re.compile(
         # No leading \b: db_password / MY_SECRET etc. must match too.
-        r"(?i)(password|passwd|secret|api[_-]?key|auth[_-]?token|access[_-]?token|client[_-]?secret)\w*"
+        # ['\"]? after \w*: JSON quoted keys ("api_key": "...") must match —
+        # a live Notion key in a config .json evaded the earlier pattern.
+        r"(?i)(password|passwd|secret|api[_-]?key|auth[_-]?token|access[_-]?token|client[_-]?secret)\w*['\"]?"
         r"\s*[:=]\s*['\"]([^'\"\s]{8,})['\"]")),
 ]
 _SCAN_SKIP_DIRS = {".git", "node_modules", "target", ".venv", "venv", "dist", "vendor", "__pycache__"}
@@ -426,8 +429,9 @@ def scan_secrets(root: str) -> dict:
                 if _PLACEHOLDER_RE.search(line):
                     continue
                 secret = m.group(m.lastindex or 0)
-                # Generic assignments need an entropy gate to skip prose values.
-                if pat_id in ("generic-assignment", "connection-string-password") and _shannon_entropy(secret) < 3.0:
+                # Generic assignments need an entropy gate to skip prose/enum
+                # values ("dotenv_local" ≈ 3.3 bits; real keys ≥ 3.9).
+                if pat_id in ("generic-assignment", "connection-string-password") and _shannon_entropy(secret) < 3.5:
                     continue
                 if pat_id == "generic-assignment" and _UUID_RE.match(secret):
                     continue
@@ -778,10 +782,17 @@ def selftest() -> int:
         fake_key = "AKIA" + "Q" * 16
         fake_pw = 'db_password = "' + "kX9v2mQ8pL4wn7Rt" + '"'
         plant.write_text(f"key = '{fake_key}'\n{fake_pw}\nsafe = 'hello world'\n")
+        # JSON quoted-key form — the format that hid a live key in a real
+        # adoption run; regression-pinned.
+        (Path(td) / "local-config.json").write_text(
+            '{"api_keys": {"notion_api_key": "' + "ntn_" + "4Q9x" * 10 + '"}}\n')
         result = scan_secrets(td)
         hits = {f["pattern"] for f in result["findings"]}
+        json_hit = any(f["file"] == "local-config.json" for f in result["findings"])
         if "aws-access-key-id" not in hits or "generic-assignment" not in hits:
             failures.append(f"secrets scanner missed planted secrets (got {hits})")
+        if not json_hit:
+            failures.append("secrets scanner missed JSON quoted-key credential")
         if any("hello" in f.get("redacted", "") for f in result["findings"]):
             failures.append("secrets scanner false-positive on plain prose")
 
