@@ -84,11 +84,13 @@ Resolve the file-matrix for the inferred frontmatter, then bucket every required
 
 Dependency hygiene here too: generate the lockfile for what exists, run the language's vulnerability audit, report criticals.
 
-## Phase 4 — Restructure (only when an invariant demands it)
+## Phase 4 — Restructure (normalize to idiomatic layout)
 
-Cosmetic moves are forbidden: a consistent existing layout that doesn't block any invariant stays. Restructure only for real blockers (tests interleaved with source breaking packaging, config unlocatable by the config stack, secrets dir inside static assets).
+Target state: the language's idiomatic layout per invariants.md §Idiomatic layout (python → `src/<pkg>/` + `tests/`, go → `cmd/`+`internal/`, etc.). Layout normalization is a STANDARD Phase 4 objective, not cosmetics — packaging correctness, import hygiene, and test isolation depend on it. What remains forbidden is bikeshedding beyond the idiomatic target (renaming modules, reorganizing within an already-idiomatic tree).
 
-For each justified move batch:
+Demote a layout move to the suggestions list only when: no verification net can be established (and smoke tests can't cover the moved surface), the move would break external consumers (published package import paths, deployed entrypoint paths, cron/systemd units pointing at absolute paths — list them), or the project is a small single-file tool where §Idiomatic layout says flat is fine.
+
+For each move batch (layout normalization included):
 
 1. Establish the verification net: existing tests must pass BEFORE the move. No tests → write smoke tests first (import/build + entrypoint) or demote the move to the suggestions list. Never move blind.
 2. `git mv` (history-preserving).

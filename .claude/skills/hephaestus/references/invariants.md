@@ -85,6 +85,21 @@ Framework is language-idiomatic; the middleware contract is not negotiable:
 - ed25519 keys only; key-based auth only — no password auth, ever.
 - Server mode: `authorized_keys` file in `config/`, host key under `secrets/` (gitignored). Generated SECURITY.md notes server mode warrants `threat_model_required: true` and a real `auth_model`.
 
+## Idiomatic layout (all projects, all languages)
+
+Source layout follows the language's packaging best practice — this is an INVARIANT (import hygiene, packaging correctness, test isolation), not cosmetics. Bootstrap emits it; adopt Phase 4 normalizes toward it.
+
+| Language | Target layout |
+|---|---|
+| python | `src/<pkg>/` for all non-test code; `tests/` separate; console entrypoints declared in the manifest, not loose root scripts |
+| rust | `src/` (+ `src/bin/` for extra binaries) — cargo enforces |
+| typescript/node | `src/` compiled to `dist/`; `tests/` or `*.test.ts` colocated per repo convention |
+| go | `cmd/<app>/` entrypoints, `internal/` private packages, `pkg/` only for deliberately public code |
+| dotnet | `src/<Project>/` + `tests/<Project>.Tests/` solution layout |
+| powershell/bash | `scripts/` or module dir; libraries separated from entrypoints |
+
+Root-level operational files (compose, manifests, config/, docs/) stay at root. Small single-file tools (one script + manifest) may stay flat — layout normalization applies once a project has multiple source modules.
+
 ## MCP server projects
 
 An MCP server is a first-class project type (`runtime_patterns`: `cli` for stdio transport, `api_service` when it serves HTTP/SSE). On top of the pattern's normal invariants:
